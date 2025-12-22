@@ -94,20 +94,21 @@ user.post('/login', async (c) => {
     expiryHours
   );
 
+  // 返回用户对象，token 嵌入其中（前端期望 data 直接是用户对象，含 token 字段）
   return c.json({
     success: true,
-    message: 'Login successful',
+    message: '',
     data: {
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        display_name: user.display_name,
-        email: user.email,
-        role: user.role,
-        quota: user.quota,
-        used_quota: user.used_quota,
-      },
+      id: user.id,
+      username: user.username,
+      display_name: user.display_name,
+      email: user.email,
+      role: user.role,
+      status: user.status || 1,
+      group: user.group || 'default',
+      quota: user.quota,
+      used_quota: user.used_quota,
+      token,  // JWT token 嵌入用户对象
     },
   });
 });
@@ -129,11 +130,13 @@ user.get('/self', jwtAuth(), async (c) => {
       display_name: user.display_name,
       email: user.email,
       role: user.role,
-      status: user.status,
+      status: user.status || 1,
+      group: user.group || 'default',
       quota: user.quota,
       used_quota: user.used_quota,
       request_count: user.request_count,
       created_at: user.created_at,
+      sidebar_modules: user.sidebar_modules || null,  // 用户侧边栏配置
     },
   });
 });

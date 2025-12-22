@@ -22,3 +22,5 @@ migrations_dir = "./migrations"
 [vars]
 ALLOWED_ORIGINS = "*"
 TOKEN_EXPIRY_HOURS = "24"
+RELAY_PROXY_URL = "https://llm-proxy-relay.onrender.com"
+RELAY_PROXY_KEY = "aUrZqBdgQKKB2NTZTfeC1mfCK7Py1hN9DNYWyAw3YFs="

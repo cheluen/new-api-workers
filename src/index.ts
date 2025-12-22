@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import type { CloudflareBindings } from './types';
 import { errorHandler, requestId, timing } from './middleware';
-import { userRoutes, tokenRoutes, channelRoutes, relayRoutes } from './routes';
+import { userRoutes, tokenRoutes, channelRoutes, relayRoutes, miscRoutes } from './routes';
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -48,6 +48,7 @@ app.get('/health', (c) => {
 app.route('/api/user', userRoutes);
 app.route('/api/token', tokenRoutes);
 app.route('/api/channel', channelRoutes);
+app.route('/api', miscRoutes);
 app.route('/', relayRoutes);
 
 app.notFound((c) => {
