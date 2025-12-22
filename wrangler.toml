@@ -10,8 +10,7 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "new-api-db"
-# Replace with your database ID after creation, or leave for auto-creation
-# database_id = "your-database-id-here"
+database_id = "ee3af1f2-433b-4a0a-8427-0019089190fe"
 migrations_dir = "./migrations"
 
 # Environment variables

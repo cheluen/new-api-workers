@@ -25,16 +25,47 @@ import {
 } from './utils';
 import axios from 'axios';
 import { MESSAGE_ROLES } from '../constants/playground.constants';
+import { authHeader } from './auth';
 
-export let API = axios.create({
-  baseURL: import.meta.env.VITE_REACT_APP_SERVER_URL
-    ? import.meta.env.VITE_REACT_APP_SERVER_URL
-    : '',
-  headers: {
-    'New-API-User': getUserIdFromLocalStorage(),
-    'Cache-Control': 'no-store',
-  },
-});
+function createAPIInstance() {
+  const instance = axios.create({
+    baseURL: import.meta.env.VITE_REACT_APP_SERVER_URL
+      ? import.meta.env.VITE_REACT_APP_SERVER_URL
+      : '',
+    headers: {
+      'New-API-User': getUserIdFromLocalStorage(),
+      'Cache-Control': 'no-store',
+    },
+  });
+
+  // 请求拦截器：添加 Authorization header
+  instance.interceptors.request.use(
+    (config) => {
+      const headers = authHeader();
+      if (headers.Authorization) {
+        config.headers.Authorization = headers.Authorization;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
+  // 响应拦截器：处理错误
+  instance.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.config && error.config.skipErrorHandler) {
+        return Promise.reject(error);
+      }
+      showError(error);
+      return Promise.reject(error);
+    }
+  );
+
+  return instance;
+}
+
+export let API = createAPIInstance();
 
 function patchAPIInstance(instance) {
   const originalGet = instance.get.bind(instance);
@@ -67,30 +98,9 @@ function patchAPIInstance(instance) {
 patchAPIInstance(API);
 
 export function updateAPI() {
-  API = axios.create({
-    baseURL: import.meta.env.VITE_REACT_APP_SERVER_URL
-      ? import.meta.env.VITE_REACT_APP_SERVER_URL
-      : '',
-    headers: {
-      'New-API-User': getUserIdFromLocalStorage(),
-      'Cache-Control': 'no-store',
-    },
-  });
-
+  API = createAPIInstance();
   patchAPIInstance(API);
 }
-
-API.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // 如果请求配置中显式要求跳过全局错误处理，则不弹出默认错误提示
-    if (error.config && error.config.skipErrorHandler) {
-      return Promise.reject(error);
-    }
-    showError(error);
-    return Promise.reject(error);
-  },
-);
 
 // playground
 

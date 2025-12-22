@@ -1,13 +1,13 @@
 -- Seed data for development
--- Default admin user with password: 123456 (bcrypt hash)
+-- Default admin user with password: 123456 (PBKDF2 hash)
 -- Note: Change this password in production!
 
 INSERT OR IGNORE INTO users (id, username, password_hash, display_name, email, role, status, quota)
 VALUES (
     1,
     'admin',
-    -- bcrypt hash of '123456' - replace in production
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    -- PBKDF2 hash of '123456' (format: salt:hash, both base64 encoded)
+    'ucLyKbJgvcwS1AI6qmXAgA==:DPortVM1m1kFjvIKHxY6yhGXso+oaSnvKo09HbDtTE8=',
     'Administrator',
     'admin@localhost',
     100,

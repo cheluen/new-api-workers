@@ -16,7 +16,7 @@ app.use(
   cors({
     origin: '*',
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'New-Api-User', 'Cache-Control', 'Pragma', 'Accept', 'Accept-Language'],
     exposeHeaders: ['X-Request-Id', 'X-Response-Time'],
     maxAge: 86400,
   })
