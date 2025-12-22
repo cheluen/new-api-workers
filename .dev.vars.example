@@ -1,0 +1,11 @@
+# Local development environment variables
+# Copy this file to .dev.vars and fill in actual values
+
+# JWT signing secret (generate a strong random string)
+JWT_SECRET=your-jwt-secret-here-use-32-chars-min
+
+# Render relay proxy URL
+RELAY_PROXY_URL=http://localhost:3000
+
+# Render relay proxy authentication key
+RELAY_PROXY_KEY=your-relay-proxy-key

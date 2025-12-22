@@ -1,0 +1,20 @@
+# Cloudflare Workers configuration for new-api
+name = "new-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "new-api-db"
+database_id = "local-dev-db-id"
+migrations_dir = "./migrations"
+
+# Environment variables (set via wrangler secret)
+# JWT_SECRET - JWT signing secret key
+# RELAY_PROXY_URL - Render relay proxy URL (e.g., https://llm-proxy-relay.onrender.com)
+# RELAY_PROXY_KEY - Render relay proxy authentication key
+
+[vars]
+ALLOWED_ORIGINS = "*"
+TOKEN_EXPIRY_HOURS = "24"

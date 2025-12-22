@@ -1,0 +1,185 @@
+import { Hono } from 'hono';
+import type { CloudflareBindings, JwtPayload } from '../types';
+import { UserService, OptionService } from '../db';
+import { signJwt } from '../utils';
+import { jwtAuth } from '../middleware';
+
+type Variables = {
+  jwtPayload: JwtPayload;
+  userId: number;
+  userRole: number;
+};
+
+const user = new Hono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+
+user.post('/register', async (c) => {
+  const optionService = new OptionService(c.env.DB);
+  const registerEnabled = await optionService.getBool('register_enabled', true);
+
+  if (!registerEnabled) {
+    return c.json({ success: false, message: 'Registration is disabled' }, 403);
+  }
+
+  const body = await c.req.json<{
+    username: string;
+    password: string;
+    email?: string;
+  }>();
+
+  if (!body.username || !body.password) {
+    return c.json({ success: false, message: 'Username and password are required' }, 400);
+  }
+
+  if (body.username.length < 3 || body.username.length > 32) {
+    return c.json({ success: false, message: 'Username must be 3-32 characters' }, 400);
+  }
+
+  if (body.password.length < 6) {
+    return c.json({ success: false, message: 'Password must be at least 6 characters' }, 400);
+  }
+
+  const userService = new UserService(c.env.DB);
+  const existing = await userService.findByUsername(body.username);
+
+  if (existing) {
+    return c.json({ success: false, message: 'Username already exists' }, 409);
+  }
+
+  const defaultQuota = await optionService.getInt('default_quota', 0);
+
+  try {
+    const userId = await userService.create({
+      username: body.username,
+      password: body.password,
+      email: body.email,
+      quota: defaultQuota,
+    });
+
+    return c.json({
+      success: true,
+      message: 'Registration successful',
+      data: { user_id: userId },
+    });
+  } catch (err) {
+    console.error('Registration error:', err);
+    return c.json({ success: false, message: 'Registration failed' }, 500);
+  }
+});
+
+user.post('/login', async (c) => {
+  const body = await c.req.json<{
+    username: string;
+    password: string;
+  }>();
+
+  if (!body.username || !body.password) {
+    return c.json({ success: false, message: 'Username and password are required' }, 400);
+  }
+
+  const userService = new UserService(c.env.DB);
+  const user = await userService.verifyCredentials(body.username, body.password);
+
+  if (!user) {
+    return c.json({ success: false, message: 'Invalid username or password' }, 401);
+  }
+
+  const expiryHours = parseInt(c.env.TOKEN_EXPIRY_HOURS || '24', 10);
+  const token = await signJwt(
+    {
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+    },
+    c.env.JWT_SECRET,
+    expiryHours
+  );
+
+  return c.json({
+    success: true,
+    message: 'Login successful',
+    data: {
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        display_name: user.display_name,
+        email: user.email,
+        role: user.role,
+        quota: user.quota,
+        used_quota: user.used_quota,
+      },
+    },
+  });
+});
+
+user.get('/self', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const userService = new UserService(c.env.DB);
+  const user = await userService.findById(userId);
+
+  if (!user) {
+    return c.json({ success: false, message: 'User not found' }, 404);
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      id: user.id,
+      username: user.username,
+      display_name: user.display_name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      quota: user.quota,
+      used_quota: user.used_quota,
+      request_count: user.request_count,
+      created_at: user.created_at,
+    },
+  });
+});
+
+user.put('/self', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json<{
+    display_name?: string;
+    email?: string;
+    password?: string;
+    current_password?: string;
+  }>();
+
+  const userService = new UserService(c.env.DB);
+  const user = await userService.findById(userId);
+
+  if (!user) {
+    return c.json({ success: false, message: 'User not found' }, 404);
+  }
+
+  if (body.password) {
+    if (!body.current_password) {
+      return c.json({ success: false, message: 'Current password is required' }, 400);
+    }
+
+    const verifiedUser = await userService.verifyCredentials(user.username, body.current_password);
+    if (!verifiedUser) {
+      return c.json({ success: false, message: 'Current password is incorrect' }, 401);
+    }
+
+    if (body.password.length < 6) {
+      return c.json({ success: false, message: 'New password must be at least 6 characters' }, 400);
+    }
+
+    await userService.updatePassword(userId, body.password);
+  }
+
+  if (body.display_name || body.email) {
+    const stmt = c.env.DB.prepare(
+      `UPDATE users SET display_name = COALESCE(?, display_name), email = COALESCE(?, email),
+       updated_at = datetime("now") WHERE id = ?`
+    ).bind(body.display_name || null, body.email || null, userId);
+    await stmt.run();
+  }
+
+  return c.json({ success: true, message: 'Profile updated' });
+});
+
+export default user;
