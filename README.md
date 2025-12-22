@@ -1,16 +1,19 @@
 # New API Workers
 
-LLM API Gateway on Cloudflare Workers with D1 Database.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cheluen/new-api-workers)
+
+LLM API Gateway on Cloudflare Workers with D1 Database. A serverless implementation of [new-api](https://github.com/Calcium-Ion/new-api) for Cloudflare's edge network.
 
 ## Features
 
-- **Pure D1 Database**: No KV storage needed, all data stored in SQLite-based D1
+- **Pure D1 Database**: All data stored in SQLite-based D1, no KV storage needed
 - **JWT Authentication**: Stateless auth for user sessions
 - **Cache API**: Free caching using Cloudflare Cache API
 - **SSE Streaming**: Full support for streaming responses via relay proxy
 - **Multi-Channel Support**: OpenAI, Azure, Anthropic, Google and custom providers
 - **Token Management**: API key generation with quota and model restrictions
 - **Usage Logging**: Track all API requests and token consumption
+- **One-Click Deploy**: Deploy to Cloudflare with a single click
 
 ## Architecture
 
@@ -22,68 +25,80 @@ LLM API Gateway on Cloudflare Workers with D1 Database.
                               │                        │
                               │                        ▼
                               │               ┌─────────────────┐
-                              │               │  Upstream LLM   │
-                              ▼               │  (OpenAI, etc)  │
-                    ┌───────────────────┐     └─────────────────┘
-                    │   Cloudflare D1   │
+                              ▼               │  Upstream LLM   │
+                    ┌───────────────────┐     │  (OpenAI, etc)  │
+                    │   Cloudflare D1   │     └─────────────────┘
                     │    (SQLite DB)    │
                     └───────────────────┘
 ```
 
-## Quick Start
+## One-Click Deployment
 
-### 1. Install Dependencies
+### Option 1: Deploy Button (Recommended)
+
+Click the button above to deploy directly to Cloudflare Workers.
+
+During deployment, you'll be prompted to configure:
+- **JWT_SECRET**: JWT signing secret (generate with `openssl rand -hex 32`)
+- **RELAY_PROXY_URL** (optional): Render relay proxy URL for SSE streaming
+- **RELAY_PROXY_KEY** (optional): Relay proxy authentication key
+
+### Option 2: Manual Deployment
 
 ```bash
+# Clone repository
+git clone https://github.com/cheluen/new-api-workers.git
+cd new-api-workers
+
+# Install dependencies
 npm install
-```
 
-### 2. Create D1 Database
-
-```bash
+# Create D1 database
 npx wrangler d1 create new-api-db
-```
+# Update wrangler.toml with the returned database_id
 
-Update `wrangler.toml` with the returned database ID.
-
-### 3. Configure Secrets
-
-```bash
-# Copy example config
-cp .dev.vars.example .dev.vars
-
-# Edit with your values
-vim .dev.vars
-```
-
-Set production secrets:
-```bash
+# Set secrets
 npx wrangler secret put JWT_SECRET
-npx wrangler secret put RELAY_PROXY_URL
-npx wrangler secret put RELAY_PROXY_KEY
+npx wrangler secret put RELAY_PROXY_URL  # optional
+npx wrangler secret put RELAY_PROXY_KEY  # optional
+
+# Deploy (runs migrations automatically)
+npm run deploy
 ```
 
-### 4. Run Migrations
+## Frontend Deployment
+
+The frontend is located in the `web/` directory and can be deployed to Cloudflare Pages:
 
 ```bash
-# Local development
+cd web
+npm install
+npm run build
+
+# Deploy to Cloudflare Pages
+npx wrangler pages deploy dist --project-name=new-api-web
+```
+
+Set the environment variable `VITE_REACT_APP_SERVER_URL` to your Workers API URL before building.
+
+## Local Development
+
+```bash
+# Copy environment variables
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with your values
+
+# Run database migrations locally
 npm run db:migrate:local
 npm run db:seed:local
 
-# Production
-npm run db:migrate:remote
-```
-
-### 5. Development
-
-```bash
+# Start development server (Workers)
 npm run dev
-```
 
-### 6. Deploy
-
-```bash
-npm run deploy
+# In another terminal, start frontend
+cd web
+npm install
+npm run dev
 ```
 
 ## API Endpoints
@@ -127,58 +142,6 @@ npm run deploy
 | `POST /v1/chat/completions` | Chat completions (streaming supported) |
 | `POST /v1/embeddings` | Text embeddings |
 
-## Usage Examples
-
-### Register and Login
-
-```bash
-# Register
-curl -X POST http://localhost:8787/api/user/register \
-  -H "Content-Type: application/json" \
-  -d '{"username": "test", "password": "test123"}'
-
-# Login
-curl -X POST http://localhost:8787/api/user/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "test", "password": "test123"}'
-```
-
-### Create API Token
-
-```bash
-# Use JWT token from login
-curl -X POST http://localhost:8787/api/token \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "My API Key"}'
-```
-
-### Chat Completion
-
-```bash
-# Use API key from token creation
-curl -X POST http://localhost:8787/v1/chat/completions \
-  -H "Authorization: Bearer sk-xxx" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-### Streaming
-
-```bash
-curl -X POST http://localhost:8787/v1/chat/completions \
-  -H "Authorization: Bearer sk-xxx" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "Tell me a story"}],
-    "stream": true
-  }'
-```
-
 ## Configuration
 
 ### Environment Variables
@@ -201,12 +164,75 @@ curl -X POST http://localhost:8787/v1/chat/completions \
 | 24 | Google Gemini |
 | 99 | Custom |
 
+## Relay Proxy Setup (Optional)
+
+For SSE streaming support, deploy the relay proxy to Render:
+
+1. Fork [llm-proxy-relay](https://github.com/cheluen/llm-proxy-relay)
+2. Create a new Web Service on Render
+3. Connect to your forked repository
+4. Set environment variables:
+   - `PROXY_SECRET_KEY`: Same as your `RELAY_PROXY_KEY`
+   - `PORT`: 3000
+5. Deploy
+
 ## Default Admin
 
+After first deployment:
 - Username: `admin`
 - Password: `123456`
 
 **Change this password immediately in production!**
+
+## Usage Examples
+
+### Register and Login
+
+```bash
+# Register
+curl -X POST https://your-worker.workers.dev/api/user/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "test", "password": "test123456"}'
+
+# Login
+curl -X POST https://your-worker.workers.dev/api/user/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "test", "password": "test123456"}'
+```
+
+### Create API Token
+
+```bash
+curl -X POST https://your-worker.workers.dev/api/token \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My API Key"}'
+```
+
+### Chat Completion
+
+```bash
+curl -X POST https://your-worker.workers.dev/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### Streaming
+
+```bash
+curl -X POST https://your-worker.workers.dev/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Tell me a story"}],
+    "stream": true
+  }'
+```
 
 ## License
 

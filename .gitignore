@@ -6,3 +6,8 @@ dist
 *.log
 .DS_Store
 worker-configuration.d.ts
+
+# Frontend
+web/node_modules
+web/dist
+web/.env

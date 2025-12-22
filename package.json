@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "npm run db:migrate:remote && wrangler deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "db:create": "wrangler d1 create new-api-db",
     "db:migrate:local": "wrangler d1 migrations apply new-api-db --local",
@@ -23,5 +23,18 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "JWT_SECRET": {
+        "description": "JWT signing secret key. Generate with: `openssl rand -hex 32`"
+      },
+      "RELAY_PROXY_URL": {
+        "description": "Optional: Render relay proxy URL for SSE streaming (e.g., https://llm-proxy-relay.onrender.com)"
+      },
+      "RELAY_PROXY_KEY": {
+        "description": "Optional: Relay proxy authentication key. Generate with: `openssl rand -hex 32`"
+      }
+    }
   }
 }

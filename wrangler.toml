@@ -1,19 +1,24 @@
 # Cloudflare Workers configuration for new-api
+# LLM API Gateway with D1 Database
 name = "new-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
 # D1 Database binding
+# The database will be automatically created during one-click deployment
+# Or create manually with: wrangler d1 create new-api-db
 [[d1_databases]]
 binding = "DB"
 database_name = "new-api-db"
-database_id = "local-dev-db-id"
+# Replace with your database ID after creation, or leave for auto-creation
+# database_id = "your-database-id-here"
 migrations_dir = "./migrations"
 
-# Environment variables (set via wrangler secret)
-# JWT_SECRET - JWT signing secret key
-# RELAY_PROXY_URL - Render relay proxy URL (e.g., https://llm-proxy-relay.onrender.com)
-# RELAY_PROXY_KEY - Render relay proxy authentication key
+# Environment variables
+# Secrets (set via wrangler secret or during deploy):
+# - JWT_SECRET: JWT signing secret key (required)
+# - RELAY_PROXY_URL: Render relay proxy URL for SSE streaming (optional)
+# - RELAY_PROXY_KEY: Relay proxy authentication key (optional)
 
 [vars]
 ALLOWED_ORIGINS = "*"
