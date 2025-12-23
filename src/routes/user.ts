@@ -185,4 +185,59 @@ user.put('/self', jwtAuth(), async (c) => {
   return c.json({ success: true, message: 'Profile updated' });
 });
 
+// GET /api/user/logout - 用户登出
+user.get('/logout', async (c) => {
+  // JWT是无状态的，前端只需清除本地存储的token
+  // 服务端返回成功即可
+  return c.json({ success: true, message: '' });
+});
+
+// GET /api/user/models - 获取用户可用模型列表
+user.get('/models', jwtAuth(), async (c) => {
+  const { ChannelService } = await import('../db');
+  const channelService = new ChannelService(c.env.DB);
+  const channels = await channelService.findEnabled();
+
+  const modelsSet = new Set<string>();
+  for (const ch of channels) {
+    if (ch.models) {
+      const models = ch.models.split(',').map((m: string) => m.trim());
+      for (const model of models) {
+        if (model && model !== '*') {
+          modelsSet.add(model);
+        }
+      }
+    }
+  }
+
+  return c.json({
+    success: true,
+    message: '',
+    data: Array.from(modelsSet),
+  });
+});
+
+// GET /api/user/groups - 获取用户组列表 (公开端点)
+user.get('/groups', async (c) => {
+  // Workers版本简化实现，返回默认分组
+  return c.json({
+    success: true,
+    message: '',
+    data: ['default'],
+  });
+});
+
+// GET /api/user/self/groups - 获取当前用户分组
+user.get('/self/groups', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const userService = new UserService(c.env.DB);
+  const user = await userService.findById(userId);
+
+  return c.json({
+    success: true,
+    message: '',
+    data: user?.group ? [user.group] : ['default'],
+  });
+});
+
 export default user;

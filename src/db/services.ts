@@ -399,10 +399,10 @@ export class LogService {
 export class OptionService {
   constructor(private db: D1Database) {}
 
-  async get(key: string): Promise<string | null> {
+  async get(key: string, defaultValue: string = ''): Promise<string> {
     const stmt = this.db.prepare('SELECT value FROM options WHERE key = ?').bind(key);
     const result = await stmt.first<{ value: string }>();
-    return result?.value || null;
+    return result?.value ?? defaultValue;
   }
 
   async set(key: string, value: string): Promise<void> {

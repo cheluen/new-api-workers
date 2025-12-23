@@ -57,6 +57,7 @@ misc.get('/status', async (c) => {
     system_name: systemName || 'New API',
     logo: logo || '',
     footer_html: footerHtml || '',
+    register_enabled: registerEnabled,
 
     // OAuth相关 - Workers版本暂不支持
     email_verification: false,
@@ -293,6 +294,176 @@ misc.get('/uptime/status', async (c) => {
     success: true,
     message: '',
     data: [],  // Workers版本暂不支持Uptime监控
+  });
+});
+
+// GET /api/option - 获取系统选项 (管理员)
+misc.get('/option', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  const optionService = new OptionService(c.env.DB);
+
+  // 获取常用配置选项
+  const options: Record<string, string> = {};
+  const keys = [
+    'system_name', 'logo', 'footer_html', 'home_page_content', 'notice',
+    'register_enabled', 'quota_per_unit', 'default_quota',
+  ];
+
+  for (const key of keys) {
+    options[key] = await optionService.get(key, '');
+  }
+
+  return c.json({
+    success: true,
+    message: '',
+    data: options,
+  });
+});
+
+// PUT /api/option - 更新系统选项 (管理员)
+misc.put('/option', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 100) {
+    return c.json({ success: false, message: 'Root permission required' }, 403);
+  }
+
+  const body = await c.req.json<Record<string, string>>();
+  const optionService = new OptionService(c.env.DB);
+
+  for (const [key, value] of Object.entries(body)) {
+    await optionService.set(key, String(value));
+  }
+
+  return c.json({
+    success: true,
+    message: 'Options updated',
+  });
+});
+
+// GET /api/group - 获取分组列表 (管理员)
+misc.get('/group', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  // Workers版本简化实现，返回默认分组
+  return c.json({
+    success: true,
+    message: '',
+    data: [{ id: 'default', name: 'default' }],
+  });
+});
+
+// GET /api/log/self - 获取个人日志 (用户)
+misc.get('/log/self', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const page = parseInt(c.req.query('p') || '0', 10);
+  const pageSize = parseInt(c.req.query('page_size') || '20', 10);
+  const offset = page * pageSize;
+
+  try {
+    const stmt = c.env.DB.prepare(`
+      SELECT id, channel_id, model_name as model, prompt_tokens, completion_tokens,
+             quota, request_id as request_id, status_code as code, created_at
+      FROM logs
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(userId, pageSize, offset);
+
+    const result = await stmt.all();
+
+    return c.json({
+      success: true,
+      message: '',
+      data: result.results || [],
+    });
+  } catch (err) {
+    console.error('Error fetching logs:', err);
+    return c.json({
+      success: true,
+      message: '',
+      data: [],
+    });
+  }
+});
+
+// GET /api/log/self/stat - 获取个人日志统计 (用户)
+misc.get('/log/self/stat', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+
+  try {
+    const stmt = c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_count,
+        SUM(prompt_tokens) as total_prompt_tokens,
+        SUM(completion_tokens) as total_completion_tokens,
+        SUM(quota) as total_quota
+      FROM logs
+      WHERE user_id = ?
+    `).bind(userId);
+
+    const result = await stmt.first() as {
+      total_count: number;
+      total_prompt_tokens: number;
+      total_completion_tokens: number;
+      total_quota: number;
+    } | null;
+
+    return c.json({
+      success: true,
+      message: '',
+      data: {
+        total_count: result?.total_count || 0,
+        total_prompt_tokens: result?.total_prompt_tokens || 0,
+        total_completion_tokens: result?.total_completion_tokens || 0,
+        total_quota: result?.total_quota || 0,
+      },
+    });
+  } catch (err) {
+    console.error('Error fetching log stats:', err);
+    return c.json({
+      success: true,
+      message: '',
+      data: { total_count: 0, total_prompt_tokens: 0, total_completion_tokens: 0, total_quota: 0 },
+    });
+  }
+});
+
+// GET /api/models - Dashboard获取模型列表 (用户认证)
+misc.get('/models', jwtAuth(), async (c) => {
+  const { ChannelService } = await import('../db');
+  const channelService = new ChannelService(c.env.DB);
+  const channels = await channelService.findEnabled();
+
+  const modelsSet = new Set<string>();
+  for (const ch of channels) {
+    if (ch.models) {
+      const models = ch.models.split(',').map((m: string) => m.trim());
+      for (const model of models) {
+        if (model && model !== '*') {
+          modelsSet.add(model);
+        }
+      }
+    }
+  }
+
+  // 返回模型列表，格式与原始API兼容
+  const data = Array.from(modelsSet).map((id, index) => ({
+    id: index + 1,
+    name: id,
+    owned_by: 'new-api',
+  }));
+
+  return c.json({
+    success: true,
+    message: '',
+    data,
   });
 });
 

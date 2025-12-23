@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
+import { trimTrailingSlash } from 'hono/trailing-slash';
 import type { CloudflareBindings } from './types';
 import { errorHandler, requestId, timing } from './middleware';
 import { userRoutes, tokenRoutes, channelRoutes, relayRoutes, miscRoutes } from './routes';
 
-const app = new Hono<{ Bindings: CloudflareBindings }>();
+const app = new Hono<{ Bindings: CloudflareBindings }>({ strict: true });
 
+app.use(trimTrailingSlash());
 app.use('*', errorHandler());
 app.use('*', requestId());
 app.use('*', timing());

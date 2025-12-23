@@ -25,9 +25,11 @@ export interface User {
   email: string;
   role: number;
   status: number;
+  group: string;
   quota: number;
   used_quota: number;
   request_count: number;
+  sidebar_modules: string | null;
   created_at: string;
   updated_at: string;
 }
