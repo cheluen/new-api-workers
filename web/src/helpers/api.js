@@ -73,11 +73,18 @@ function patchAPIInstance(instance) {
 
   const genKey = (url, config = {}) => {
     const params = config.params ? JSON.stringify(config.params) : '{}';
-    return `${url}?${params}`;
+    // 包含当前用户状态，避免token变化时使用旧的缓存请求
+    const hasAuth = !!localStorage.getItem('user');
+    return `${url}?${params}:auth=${hasAuth}`;
   };
 
   instance.get = (url, config = {}) => {
     if (config?.disableDuplicate) {
+      return originalGet(url, config);
+    }
+
+    // 不缓存需要认证的API请求，避免401响应被复用
+    if (url.includes('/api/user/') || url.includes('/api/token') || url.includes('/api/channel')) {
       return originalGet(url, config);
     }
 

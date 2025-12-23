@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import type { CloudflareBindings } from './types';
 import { errorHandler, requestId, timing } from './middleware';
-import { userRoutes, tokenRoutes, channelRoutes, relayRoutes, miscRoutes, modelRoutes } from './routes';
+import { userRoutes, tokenRoutes, channelRoutes, relayRoutes, miscRoutes, modelRoutes, vendorRoutes } from './routes';
 
 // 使用 strict: false 让 Hono 自动处理尾部斜杠
 const app = new Hono<{ Bindings: CloudflareBindings }>({ strict: false });
@@ -49,6 +49,7 @@ app.route('/api/user', userRoutes);
 app.route('/api/token', tokenRoutes);
 app.route('/api/channel', channelRoutes);
 app.route('/api/models', modelRoutes);
+app.route('/api/vendors', vendorRoutes);
 app.route('/api', miscRoutes);
 app.route('/', relayRoutes);
 

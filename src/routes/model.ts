@@ -343,4 +343,71 @@ model.delete('/:id', async (c) => {
   }
 });
 
+// ==================== Vendors Routes ====================
+// 创建一个vendors子路由，将被挂载到 /api/vendors
+const vendors = new Hono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+
+vendors.use('/*', jwtAuth());
+vendors.use('/*', requireAdmin());
+
+// GET /api/vendors/ - 获取所有厂商列表
+vendors.get('/', async (c) => {
+  try {
+    const stmt = c.env.DB.prepare(`
+      SELECT DISTINCT vendor FROM model_metadata WHERE vendor IS NOT NULL AND vendor != ''
+      ORDER BY vendor ASC
+    `);
+    const result = await stmt.all();
+
+    // 定义已知厂商列表
+    const knownVendors = [
+      { id: 'openai', name: 'OpenAI', icon: 'openai' },
+      { id: 'anthropic', name: 'Anthropic', icon: 'anthropic' },
+      { id: 'google', name: 'Google', icon: 'google' },
+      { id: 'azure', name: 'Azure OpenAI', icon: 'azure' },
+      { id: 'meta', name: 'Meta', icon: 'meta' },
+      { id: 'mistral', name: 'Mistral AI', icon: 'mistral' },
+      { id: 'cohere', name: 'Cohere', icon: 'cohere' },
+      { id: 'deepseek', name: 'DeepSeek', icon: 'deepseek' },
+      { id: 'zhipu', name: 'Zhipu AI', icon: 'zhipu' },
+      { id: 'baidu', name: 'Baidu', icon: 'baidu' },
+      { id: 'alibaba', name: 'Alibaba', icon: 'alibaba' },
+      { id: 'moonshot', name: 'Moonshot', icon: 'moonshot' },
+      { id: 'other', name: 'Other', icon: 'other' },
+    ];
+
+    // 合并数据库中的厂商和已知厂商
+    const dbVendors = (result.results || []).map((r: Record<string, unknown>) => String(r.vendor));
+    const allVendors = [...knownVendors];
+
+    // 添加数据库中但不在已知列表中的厂商
+    for (const v of dbVendors) {
+      if (!knownVendors.find(kv => kv.id === v.toLowerCase())) {
+        allVendors.push({ id: v.toLowerCase(), name: v, icon: 'other' });
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: '',
+      data: allVendors,
+    });
+  } catch (err) {
+    console.error('Error fetching vendors:', err);
+    // 返回默认厂商列表
+    return c.json({
+      success: true,
+      message: '',
+      data: [
+        { id: 'openai', name: 'OpenAI', icon: 'openai' },
+        { id: 'anthropic', name: 'Anthropic', icon: 'anthropic' },
+        { id: 'google', name: 'Google', icon: 'google' },
+        { id: 'azure', name: 'Azure OpenAI', icon: 'azure' },
+        { id: 'other', name: 'Other', icon: 'other' },
+      ],
+    });
+  }
+});
+
+export { vendors };
 export default model;
