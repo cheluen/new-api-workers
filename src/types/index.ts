@@ -30,6 +30,11 @@ export interface User {
   used_quota: number;
   request_count: number;
   sidebar_modules: string | null;
+  // 推广相关字段
+  aff_code: string | null;
+  aff_count: number;
+  aff_quota: number;
+  aff_history_quota: number;
   created_at: string;
   updated_at: string;
 }

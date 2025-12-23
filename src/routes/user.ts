@@ -307,7 +307,102 @@ user.put('/setting', jwtAuth(), async (c) => {
   return c.json({ success: true, message: 'Settings updated' });
 });
 
-// GET /api/user/ - 获取用户列表 (管理员)
+// GET /api/user/aff - 获取用户推广信息
+user.get('/aff', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const userService = new UserService(c.env.DB);
+  const user = await userService.findById(userId);
+
+  if (!user) {
+    return c.json({ success: false, message: 'User not found' }, 404);
+  }
+
+  // Workers版本简化实现，返回基本推广数据
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      aff_code: user.aff_code || `aff_${userId}`,
+      aff_count: user.aff_count || 0,
+      aff_quota: user.aff_quota || 0,
+      aff_history_quota: user.aff_history_quota || 0,
+    },
+  });
+});
+
+// GET /api/user/topup/info - 获取充值配置信息
+user.get('/topup/info', jwtAuth(), async (c) => {
+  // Workers版本简化实现，返回基本充值配置
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      min_topup: 1,
+      topup_group_ratio: {},
+      enable_online_topup: false,
+      payment_address: '',
+      topup_ratio: 1,
+    },
+  });
+});
+
+// GET /api/user/topup - 获取充值记录列表
+user.get('/topup', jwtAuth(), async (c) => {
+  // Workers版本简化实现，返回空列表
+  const page = parseInt(c.req.query('p') || '1', 10);
+  const pageSize = parseInt(c.req.query('page_size') || '20', 10);
+
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      items: [],
+      total: 0,
+      page,
+      page_size: pageSize,
+    },
+  });
+});
+
+// POST /api/user/topup - 创建充值订单 (Workers版本不支持)
+user.post('/topup', jwtAuth(), async (c) => {
+  return c.json({
+    success: false,
+    message: 'Online topup is not supported in Workers version',
+  }, 501);
+});
+
+// GET /api/user/amount - 获取用户余额金额信息
+user.get('/amount', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const userService = new UserService(c.env.DB);
+  const user = await userService.findById(userId);
+
+  if (!user) {
+    return c.json({ success: false, message: 'User not found' }, 404);
+  }
+
+  // 返回用户额度信息
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      balance: user.quota || 0,
+      used_amount: user.used_quota || 0,
+      currency: 'quota',
+    },
+  });
+});
+
+// POST /api/user/amount - 用户充值请求 (Workers版本不支持在线充值)
+user.post('/amount', jwtAuth(), async (c) => {
+  return c.json({
+    success: false,
+    message: 'Online payment is not supported in Workers version',
+  }, 501);
+});
+
+// GET /api/user/ - 获取用户列表 (���理员)
 user.get('/', jwtAuth(), async (c) => {
   const userRole = c.get('userRole');
   if (userRole < 10) {

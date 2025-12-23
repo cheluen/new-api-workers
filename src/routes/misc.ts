@@ -814,4 +814,150 @@ misc.get('/models', jwtAuth(), async (c) => {
   });
 });
 
+// GET /api/redemption/ - 获取兑换码列表 (管理员)
+misc.get('/redemption', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  const page = parseInt(c.req.query('p') || '1', 10);
+  const pageSize = parseInt(c.req.query('page_size') || '20', 10);
+
+  // Workers版本简化实现，返回空列表
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      items: [],
+      total: 0,
+      page,
+      page_size: pageSize,
+    },
+  });
+});
+
+// POST /api/redemption/ - 创建兑换码 (管理员)
+misc.post('/redemption', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  // Workers版本简化实现
+  return c.json({
+    success: false,
+    message: 'Redemption codes are not supported in Workers version',
+  }, 501);
+});
+
+// DELETE /api/redemption/:id - 删除兑换码 (管理员)
+misc.delete('/redemption/:id', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  return c.json({
+    success: false,
+    message: 'Redemption codes are not supported in Workers version',
+  }, 501);
+});
+
+// GET /api/mj/ - 获取Midjourney任务列表
+misc.get('/mj', jwtAuth(), async (c) => {
+  const page = parseInt(c.req.query('p') || '1', 10);
+  const pageSize = parseInt(c.req.query('page_size') || '20', 10);
+
+  // Workers版本简化实现，返回空列表
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      items: [],
+      total: 0,
+      page,
+      page_size: pageSize,
+    },
+  });
+});
+
+// GET /api/task/ - 获取异步任务列表
+misc.get('/task', jwtAuth(), async (c) => {
+  const page = parseInt(c.req.query('p') || '1', 10);
+  const pageSize = parseInt(c.req.query('page_size') || '20', 10);
+
+  // Workers版本简化实现，返回空列表
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      items: [],
+      total: 0,
+      page,
+      page_size: pageSize,
+    },
+  });
+});
+
+// GET /api/pricing - 获取定价信息
+misc.get('/pricing', async (c) => {
+  const { ChannelService } = await import('../db');
+  const channelService = new ChannelService(c.env.DB);
+  const channels = await channelService.findEnabled();
+
+  const modelsMap = new Map<string, { input: number; output: number }>();
+
+  for (const ch of channels) {
+    if (ch.models) {
+      const models = ch.models.split(',').map((m: string) => m.trim());
+      for (const model of models) {
+        if (model && model !== '*' && !modelsMap.has(model)) {
+          // 默认价格，可以从数据库或配置中获取
+          modelsMap.set(model, { input: 1, output: 1 });
+        }
+      }
+    }
+  }
+
+  // 转换为定价数组格式
+  const data = Array.from(modelsMap.entries()).map(([name, price]) => ({
+    model: name,
+    model_ratio: 1,
+    input: price.input,
+    output: price.output,
+    type: 'chat',
+  }));
+
+  return c.json({
+    success: true,
+    message: '',
+    data,
+  });
+});
+
+// GET /api/about - 获取关于页面信息
+misc.get('/about', async (c) => {
+  const optionService = new OptionService(c.env.DB);
+  const aboutContent = await optionService.get('about', '');
+
+  return c.json({
+    success: true,
+    message: '',
+    data: aboutContent || 'New API Workers Edition - A lightweight LLM API gateway running on Cloudflare Workers.',
+  });
+});
+
+// GET /api/prefill_group - 获取预填充分组信息
+misc.get('/prefill_group', async (c) => {
+  // type参数: model, endpoint, tag 等
+  // Workers版本简化实现，返回空数组
+  // 原版本这里会返回模型、端点、标签等预填充数据
+  return c.json({
+    success: true,
+    message: '',
+    data: [],
+  });
+});
+
 export default misc;

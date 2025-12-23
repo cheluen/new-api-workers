@@ -144,6 +144,80 @@ channel.get('/models', async (c) => {
   });
 });
 
+// GET /api/channel/test/:id - 测试渠道连通性
+channel.get('/test/:id', async (c) => {
+  const channelId = parseInt(c.req.param('id'), 10);
+  const model = c.req.query('model') || '';
+  const channelService = new ChannelService(c.env.DB);
+  const ch = await channelService.findById(channelId);
+
+  if (!ch) {
+    return c.json({ success: false, message: 'Channel not found' }, 404);
+  }
+
+  // 简化的渠道测试：尝试向渠道发送一个简单请求
+  try {
+    const testModel = model || (ch.models ? ch.models.split(',')[0].trim() : 'gpt-3.5-turbo');
+    const baseUrl = ch.base_url.replace(/\/$/, '');
+
+    // 根据渠道类型构建测试请求
+    const testUrl = `${baseUrl}/v1/models`;
+    const response = await fetch(testUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${ch.key}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const latency = 0; // 简化版本不计算延迟
+
+    if (response.ok) {
+      return c.json({
+        success: true,
+        message: 'Channel test passed',
+        data: {
+          latency,
+          model: testModel,
+        },
+      });
+    } else {
+      return c.json({
+        success: false,
+        message: `Channel test failed: HTTP ${response.status}`,
+      });
+    }
+  } catch (err) {
+    console.error('Channel test error:', err);
+    return c.json({
+      success: false,
+      message: `Channel test failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+    });
+  }
+});
+
+// GET /api/channel/update_balance/:id - 更新渠道余额
+channel.get('/update_balance/:id', async (c) => {
+  const channelId = parseInt(c.req.param('id'), 10);
+  const channelService = new ChannelService(c.env.DB);
+  const ch = await channelService.findById(channelId);
+
+  if (!ch) {
+    return c.json({ success: false, message: 'Channel not found' }, 404);
+  }
+
+  // Workers版本简化实现：返回当前余额状态
+  // 实际的余额查询需要根据不同渠道类型调用不同的API
+  return c.json({
+    success: true,
+    message: 'Balance check not supported in Workers version',
+    data: {
+      balance: 0,
+      balance_updated_at: new Date().toISOString(),
+    },
+  });
+});
+
 // GET /api/channel/search - 搜索渠道
 channel.get('/search', async (c) => {
   const keyword = c.req.query('keyword') || '';

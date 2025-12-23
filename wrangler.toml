@@ -4,6 +4,13 @@ name = "new-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
+# Static Assets configuration - Frontend embedded in Workers
+# SPA mode: returns index.html for routes not matching static files
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
 # D1 Database binding
 # The database will be automatically created during one-click deployment
 # Or create manually with: wrangler d1 create new-api-db
