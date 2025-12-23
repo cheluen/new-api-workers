@@ -160,7 +160,7 @@ misc.get('/status', async (c) => {
 });
 
 // GET /api/data/ - 获取所有用户数据统计 (管理员专用，兼容原始API格式)
-misc.get('/data/', jwtAuth(), async (c) => {
+misc.get('/data', jwtAuth(), async (c) => {
   const userRole = c.get('userRole');
 
   // 检查是否是管理员 (role >= 10)
@@ -179,7 +179,7 @@ misc.get('/data/', jwtAuth(), async (c) => {
     if (username) {
       stmt = c.env.DB.prepare(`
         SELECT
-          l.model_name,
+          l.model as model_name,
           strftime('%s', date(l.created_at)) as created_at,
           SUM(l.prompt_tokens + l.completion_tokens) as token_used,
           COUNT(*) as count,
@@ -191,13 +191,13 @@ misc.get('/data/', jwtAuth(), async (c) => {
         WHERE l.created_at >= datetime(?, 'unixepoch')
           AND l.created_at <= datetime(?, 'unixepoch')
           AND u.username LIKE ?
-        GROUP BY l.model_name, date(l.created_at), l.user_id
+        GROUP BY l.model, date(l.created_at), l.user_id
         ORDER BY l.created_at ASC
       `).bind(startTimestamp, endTimestamp, `%${username}%`);
     } else {
       stmt = c.env.DB.prepare(`
         SELECT
-          l.model_name,
+          l.model as model_name,
           strftime('%s', date(l.created_at)) as created_at,
           SUM(l.prompt_tokens + l.completion_tokens) as token_used,
           COUNT(*) as count,
@@ -208,7 +208,7 @@ misc.get('/data/', jwtAuth(), async (c) => {
         LEFT JOIN users u ON l.user_id = u.id
         WHERE l.created_at >= datetime(?, 'unixepoch')
           AND l.created_at <= datetime(?, 'unixepoch')
-        GROUP BY l.model_name, date(l.created_at), l.user_id
+        GROUP BY l.model, date(l.created_at), l.user_id
         ORDER BY l.created_at ASC
       `).bind(startTimestamp, endTimestamp);
     }
@@ -254,7 +254,7 @@ misc.get('/data/', jwtAuth(), async (c) => {
 });
 
 // GET /api/data/self/ - 获取用户使用数据统计 (兼容原始API格式)
-misc.get('/data/self/', jwtAuth(), async (c) => {
+misc.get('/data/self', jwtAuth(), async (c) => {
   const userId = c.get('userId');
 
   // 获取查询参数
@@ -265,7 +265,7 @@ misc.get('/data/self/', jwtAuth(), async (c) => {
     // 从 logs 表查询数据，按模型和时间分组，返回与原始 QuotaData 兼容的格式
     const stmt = c.env.DB.prepare(`
       SELECT
-        model_name,
+        model,
         strftime('%s', date(created_at)) as created_at,
         SUM(prompt_tokens + completion_tokens) as token_used,
         COUNT(*) as count,
@@ -274,7 +274,7 @@ misc.get('/data/self/', jwtAuth(), async (c) => {
       WHERE user_id = ?
         AND created_at >= datetime(?, 'unixepoch')
         AND created_at <= datetime(?, 'unixepoch')
-      GROUP BY model_name, date(created_at)
+      GROUP BY model, date(created_at)
       ORDER BY created_at ASC
     `).bind(userId, startTimestamp, endTimestamp);
 
@@ -387,23 +387,59 @@ misc.get('/group', jwtAuth(), async (c) => {
   });
 });
 
-// GET /api/log/self - 获取个人日志 (用户)
-misc.get('/log/self', jwtAuth(), async (c) => {
-  const userId = c.get('userId');
+// GET /api/log/ - 获取所有日志 (管理员)
+misc.get('/log', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
   const page = parseInt(c.req.query('p') || '0', 10);
   const pageSize = parseInt(c.req.query('page_size') || '20', 10);
   const offset = page * pageSize;
 
-  try {
-    const stmt = c.env.DB.prepare(`
-      SELECT id, channel_id, model_name as model, prompt_tokens, completion_tokens,
-             quota, request_id as request_id, status_code as code, created_at
-      FROM logs
-      WHERE user_id = ?
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `).bind(userId, pageSize, offset);
+  // 过滤参数
+  const username = c.req.query('username') || '';
+  const tokenName = c.req.query('token_name') || '';
+  const modelName = c.req.query('model_name') || '';
+  const startTimestamp = parseInt(c.req.query('start_timestamp') || '0', 10);
+  const endTimestamp = parseInt(c.req.query('end_timestamp') || String(Math.floor(Date.now() / 1000)), 10);
+  const channel = c.req.query('channel') || '';
 
+  try {
+    let sql = `
+      SELECT l.id, l.user_id, u.username, l.channel_id, l.model as model,
+             l.prompt_tokens, l.completion_tokens, l.quota,
+             l.request_id, l.status_code as code, l.created_at, t.name as token_name
+      FROM logs l
+      LEFT JOIN users u ON l.user_id = u.id
+      LEFT JOIN tokens t ON l.token_id = t.id
+      WHERE l.created_at >= datetime(?, 'unixepoch')
+        AND l.created_at <= datetime(?, 'unixepoch')
+    `;
+    const params: (string | number)[] = [startTimestamp, endTimestamp];
+
+    if (username) {
+      sql += ` AND u.username LIKE ?`;
+      params.push(`%${username}%`);
+    }
+    if (tokenName) {
+      sql += ` AND t.name LIKE ?`;
+      params.push(`%${tokenName}%`);
+    }
+    if (modelName) {
+      sql += ` AND l.model LIKE ?`;
+      params.push(`%${modelName}%`);
+    }
+    if (channel) {
+      sql += ` AND l.channel_id = ?`;
+      params.push(parseInt(channel, 10));
+    }
+
+    sql += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(pageSize, offset);
+
+    const stmt = c.env.DB.prepare(sql).bind(...params);
     const result = await stmt.all();
 
     return c.json({
@@ -412,7 +448,7 @@ misc.get('/log/self', jwtAuth(), async (c) => {
       data: result.results || [],
     });
   } catch (err) {
-    console.error('Error fetching logs:', err);
+    console.error('Error fetching admin logs:', err);
     return c.json({
       success: true,
       message: '',
@@ -421,21 +457,53 @@ misc.get('/log/self', jwtAuth(), async (c) => {
   }
 });
 
-// GET /api/log/self/stat - 获取个人日志统计 (用户)
-misc.get('/log/self/stat', jwtAuth(), async (c) => {
-  const userId = c.get('userId');
+// GET /api/log/stat - 获取所有日志统计 (管理员)
+misc.get('/log/stat', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  const startTimestamp = parseInt(c.req.query('start_timestamp') || '0', 10);
+  const endTimestamp = parseInt(c.req.query('end_timestamp') || String(Math.floor(Date.now() / 1000)), 10);
+  const username = c.req.query('username') || '';
+  const tokenName = c.req.query('token_name') || '';
+  const modelName = c.req.query('model_name') || '';
+  const channel = c.req.query('channel') || '';
 
   try {
-    const stmt = c.env.DB.prepare(`
+    let sql = `
       SELECT
         COUNT(*) as total_count,
-        SUM(prompt_tokens) as total_prompt_tokens,
-        SUM(completion_tokens) as total_completion_tokens,
-        SUM(quota) as total_quota
-      FROM logs
-      WHERE user_id = ?
-    `).bind(userId);
+        SUM(l.prompt_tokens) as total_prompt_tokens,
+        SUM(l.completion_tokens) as total_completion_tokens,
+        SUM(l.quota) as total_quota
+      FROM logs l
+      LEFT JOIN users u ON l.user_id = u.id
+      LEFT JOIN tokens t ON l.token_id = t.id
+      WHERE l.created_at >= datetime(?, 'unixepoch')
+        AND l.created_at <= datetime(?, 'unixepoch')
+    `;
+    const params: (string | number)[] = [startTimestamp, endTimestamp];
 
+    if (username) {
+      sql += ` AND u.username LIKE ?`;
+      params.push(`%${username}%`);
+    }
+    if (tokenName) {
+      sql += ` AND t.name LIKE ?`;
+      params.push(`%${tokenName}%`);
+    }
+    if (modelName) {
+      sql += ` AND l.model LIKE ?`;
+      params.push(`%${modelName}%`);
+    }
+    if (channel) {
+      sql += ` AND l.channel_id = ?`;
+      params.push(parseInt(channel, 10));
+    }
+
+    const stmt = c.env.DB.prepare(sql).bind(...params);
     const result = await stmt.first() as {
       total_count: number;
       total_prompt_tokens: number;
@@ -461,6 +529,257 @@ misc.get('/log/self/stat', jwtAuth(), async (c) => {
       data: { total_count: 0, total_prompt_tokens: 0, total_completion_tokens: 0, total_quota: 0 },
     });
   }
+});
+
+// DELETE /api/log/ - 删除历史日志 (管理员)
+misc.delete('/log', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 100) {
+    return c.json({ success: false, message: 'Root permission required' }, 403);
+  }
+
+  const targetTimestamp = parseInt(c.req.query('target_timestamp') || '0', 10);
+  if (!targetTimestamp) {
+    return c.json({ success: false, message: 'target_timestamp is required' }, 400);
+  }
+
+  try {
+    const stmt = c.env.DB.prepare(`
+      DELETE FROM logs WHERE created_at < datetime(?, 'unixepoch')
+    `).bind(targetTimestamp);
+    const result = await stmt.run();
+
+    return c.json({
+      success: true,
+      message: `Deleted ${result.meta?.changes || 0} logs`,
+    });
+  } catch (err) {
+    console.error('Error deleting logs:', err);
+    return c.json({ success: false, message: 'Failed to delete logs' }, 500);
+  }
+});
+
+// GET /api/log/self/ - 获取个人日志 (用户)
+misc.get('/log/self', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const page = parseInt(c.req.query('p') || '0', 10);
+  const pageSize = parseInt(c.req.query('page_size') || '20', 10);
+  const offset = page * pageSize;
+
+  // 过滤参数
+  const tokenName = c.req.query('token_name') || '';
+  const modelName = c.req.query('model_name') || '';
+  const startTimestamp = parseInt(c.req.query('start_timestamp') || '0', 10);
+  const endTimestamp = parseInt(c.req.query('end_timestamp') || String(Math.floor(Date.now() / 1000)), 10);
+
+  try {
+    let sql = `
+      SELECT l.id, l.channel_id, l.model as model, l.prompt_tokens, l.completion_tokens,
+             l.quota, l.request_id, l.status_code as code, l.created_at, t.name as token_name
+      FROM logs l
+      LEFT JOIN tokens t ON l.token_id = t.id
+      WHERE l.user_id = ?
+        AND l.created_at >= datetime(?, 'unixepoch')
+        AND l.created_at <= datetime(?, 'unixepoch')
+    `;
+    const params: (string | number)[] = [userId, startTimestamp, endTimestamp];
+
+    if (tokenName) {
+      sql += ` AND t.name LIKE ?`;
+      params.push(`%${tokenName}%`);
+    }
+    if (modelName) {
+      sql += ` AND l.model LIKE ?`;
+      params.push(`%${modelName}%`);
+    }
+
+    sql += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(pageSize, offset);
+
+    const stmt = c.env.DB.prepare(sql).bind(...params);
+    const result = await stmt.all();
+
+    return c.json({
+      success: true,
+      message: '',
+      data: result.results || [],
+    });
+  } catch (err) {
+    console.error('Error fetching logs:', err);
+    return c.json({
+      success: true,
+      message: '',
+      data: [],
+    });
+  }
+});
+
+// GET /api/log/self/stat - 获取个人日志统计 (用户)
+misc.get('/log/self/stat', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+
+  // 过滤参数
+  const tokenName = c.req.query('token_name') || '';
+  const modelName = c.req.query('model_name') || '';
+  const startTimestamp = parseInt(c.req.query('start_timestamp') || '0', 10);
+  const endTimestamp = parseInt(c.req.query('end_timestamp') || String(Math.floor(Date.now() / 1000)), 10);
+
+  try {
+    let sql = `
+      SELECT
+        COUNT(*) as total_count,
+        SUM(l.prompt_tokens) as total_prompt_tokens,
+        SUM(l.completion_tokens) as total_completion_tokens,
+        SUM(l.quota) as total_quota
+      FROM logs l
+      LEFT JOIN tokens t ON l.token_id = t.id
+      WHERE l.user_id = ?
+        AND l.created_at >= datetime(?, 'unixepoch')
+        AND l.created_at <= datetime(?, 'unixepoch')
+    `;
+    const params: (string | number)[] = [userId, startTimestamp, endTimestamp];
+
+    if (tokenName) {
+      sql += ` AND t.name LIKE ?`;
+      params.push(`%${tokenName}%`);
+    }
+    if (modelName) {
+      sql += ` AND l.model LIKE ?`;
+      params.push(`%${modelName}%`);
+    }
+
+    const stmt = c.env.DB.prepare(sql).bind(...params);
+    const result = await stmt.first() as {
+      total_count: number;
+      total_prompt_tokens: number;
+      total_completion_tokens: number;
+      total_quota: number;
+    } | null;
+
+    return c.json({
+      success: true,
+      message: '',
+      data: {
+        total_count: result?.total_count || 0,
+        total_prompt_tokens: result?.total_prompt_tokens || 0,
+        total_completion_tokens: result?.total_completion_tokens || 0,
+        total_quota: result?.total_quota || 0,
+      },
+    });
+  } catch (err) {
+    console.error('Error fetching log stats:', err);
+    return c.json({
+      success: true,
+      message: '',
+      data: { total_count: 0, total_prompt_tokens: 0, total_completion_tokens: 0, total_quota: 0 },
+    });
+  }
+});
+
+// GET /api/setting - 获取系统设置 (管理员)
+misc.get('/setting', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  const optionService = new OptionService(c.env.DB);
+
+  // 获取所有系统设置
+  const settings: Record<string, unknown> = {
+    // 基础设置
+    system_name: await optionService.get('system_name', 'New API'),
+    logo: await optionService.get('logo', ''),
+    footer_html: await optionService.get('footer_html', ''),
+    home_page_content: await optionService.get('home_page_content', ''),
+    notice: await optionService.get('notice', ''),
+
+    // 注册设置
+    register_enabled: await optionService.getBool('register_enabled', true),
+    email_verification: false,  // Workers版本不支持邮件验证
+
+    // 配额设置
+    quota_per_unit: await optionService.getInt('quota_per_unit', 500000),
+    default_quota: await optionService.getInt('default_quota', 0),
+    display_in_currency: false,
+    quota_display_type: 'quota',
+
+    // 功能开关 (大部分Workers版本暂不支持)
+    enable_drawing: false,
+    enable_task: false,
+    enable_data_export: true,
+    enable_batch_update: false,
+    demo_site_enabled: false,
+    self_use_mode_enabled: false,
+
+    // 聊天设置
+    chats: await optionService.get('chats', '[]'),
+
+    // Dashboard设置
+    api_info_enabled: true,
+    uptime_kuma_enabled: false,
+    uptime_kuma_url: '',
+    announcements_enabled: false,
+    faq_enabled: false,
+
+    // 绘图设置 (Workers版本暂不支持)
+    mj_notify_enabled: false,
+    mj_account_filter_enabled: false,
+    mj_mode_enabled: false,
+
+    // OAuth设置 (Workers版本暂不支持)
+    github_oauth: false,
+    discord_oauth: false,
+    linuxdo_oauth: false,
+    telegram_oauth: false,
+    wechat_login: false,
+    oidc_enabled: false,
+
+    // 其他设置
+    top_up_link: '',
+    docs_link: '',
+    server_address: '',
+    price: 1,
+    usd_exchange_rate: 7.3,
+  };
+
+  return c.json({
+    success: true,
+    message: '',
+    data: settings,
+  });
+});
+
+// PUT /api/setting - 更新系统设置 (管理员)
+misc.put('/setting', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 100) {
+    return c.json({ success: false, message: 'Root permission required' }, 403);
+  }
+
+  const body = await c.req.json<Record<string, unknown>>();
+  const optionService = new OptionService(c.env.DB);
+
+  // 允许更新的设置键
+  const allowedKeys = [
+    'system_name', 'logo', 'footer_html', 'home_page_content', 'notice',
+    'register_enabled', 'quota_per_unit', 'default_quota',
+    'enable_drawing', 'enable_task', 'enable_data_export',
+    'chats', 'api_info_enabled', 'uptime_kuma_enabled', 'uptime_kuma_url',
+    'announcements_enabled', 'faq_enabled', 'top_up_link', 'docs_link',
+    'server_address', 'price', 'usd_exchange_rate',
+  ];
+
+  for (const [key, value] of Object.entries(body)) {
+    if (allowedKeys.includes(key)) {
+      await optionService.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+    }
+  }
+
+  return c.json({
+    success: true,
+    message: 'Settings updated',
+  });
 });
 
 // GET /api/models - Dashboard获取模型列表 (用户认证)

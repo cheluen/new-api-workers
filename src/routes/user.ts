@@ -240,4 +240,167 @@ user.get('/self/groups', jwtAuth(), async (c) => {
   });
 });
 
+// GET /api/user/2fa/status - 获取2FA状态 (Workers版本不支持2FA，返回未启用)
+user.get('/2fa/status', jwtAuth(), async (c) => {
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      enabled: false,
+      has_backup_codes: false,
+    },
+  });
+});
+
+// GET /api/user/passkey - 获取Passkey状态 (Workers版本不支持Passkey)
+user.get('/passkey', jwtAuth(), async (c) => {
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      enabled: false,
+      credentials: [],
+    },
+  });
+});
+
+// GET /api/user/token - 生成访问令牌
+user.get('/token', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const userService = new UserService(c.env.DB);
+  const user = await userService.findById(userId);
+
+  if (!user) {
+    return c.json({ success: false, message: 'User not found' }, 404);
+  }
+
+  const expiryHours = parseInt(c.env.TOKEN_EXPIRY_HOURS || '24', 10);
+  const token = await signJwt(
+    {
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+    },
+    c.env.JWT_SECRET,
+    expiryHours
+  );
+
+  return c.json({
+    success: true,
+    message: '',
+    data: token,
+  });
+});
+
+// PUT /api/user/setting - 更新用户设置
+user.put('/setting', jwtAuth(), async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json<{ sidebar_modules?: string }>();
+
+  if (body.sidebar_modules !== undefined) {
+    const stmt = c.env.DB.prepare(
+      `UPDATE users SET sidebar_modules = ?, updated_at = datetime("now") WHERE id = ?`
+    ).bind(body.sidebar_modules, userId);
+    await stmt.run();
+  }
+
+  return c.json({ success: true, message: 'Settings updated' });
+});
+
+// GET /api/user/ - 获取用户列表 (管理员)
+user.get('/', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  const page = parseInt(c.req.query('p') || '0', 10);
+  const pageSize = parseInt(c.req.query('page_size') || '20', 10);
+  const offset = page * pageSize;
+
+  try {
+    const stmt = c.env.DB.prepare(`
+      SELECT id, username, display_name, email, role, status, quota, used_quota,
+             request_count, created_at
+      FROM users
+      ORDER BY id DESC
+      LIMIT ? OFFSET ?
+    `).bind(pageSize, offset);
+
+    const result = await stmt.all();
+
+    return c.json({
+      success: true,
+      message: '',
+      data: result.results || [],
+    });
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    return c.json({ success: true, message: '', data: [] });
+  }
+});
+
+// POST /api/user/manage - 管理用户 (管理员)
+user.post('/manage', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  const body = await c.req.json<{
+    id: number;
+    action: string;
+    value?: number | string;
+  }>();
+
+  const { id, action, value } = body;
+
+  try {
+    switch (action) {
+      case 'delete':
+        await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run();
+        break;
+      case 'status':
+        await c.env.DB.prepare('UPDATE users SET status = ? WHERE id = ?').bind(value, id).run();
+        break;
+      case 'role':
+        await c.env.DB.prepare('UPDATE users SET role = ? WHERE id = ?').bind(value, id).run();
+        break;
+      case 'quota':
+        await c.env.DB.prepare('UPDATE users SET quota = ? WHERE id = ?').bind(value, id).run();
+        break;
+      default:
+        return c.json({ success: false, message: 'Unknown action' }, 400);
+    }
+
+    return c.json({ success: true, message: 'User updated' });
+  } catch (err) {
+    console.error('Error managing user:', err);
+    return c.json({ success: false, message: 'Failed to manage user' }, 500);
+  }
+});
+
+// DELETE /api/user/:id - 删除用户 (管理员)
+user.delete('/:id', jwtAuth(), async (c) => {
+  const userRole = c.get('userRole');
+  if (userRole < 10) {
+    return c.json({ success: false, message: 'Permission denied' }, 403);
+  }
+
+  const targetId = parseInt(c.req.param('id'), 10);
+  const currentUserId = c.get('userId');
+
+  if (targetId === currentUserId) {
+    return c.json({ success: false, message: 'Cannot delete yourself' }, 400);
+  }
+
+  try {
+    await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId).run();
+    return c.json({ success: true, message: 'User deleted' });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    return c.json({ success: false, message: 'Failed to delete user' }, 500);
+  }
+});
+
 export default user;

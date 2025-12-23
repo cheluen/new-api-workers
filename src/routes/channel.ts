@@ -82,6 +82,96 @@ channel.post('/', async (c) => {
   }
 });
 
+// 静态路由必须在动态路由 /:id 之前定义
+channel.get('/types/list', async (c) => {
+  return c.json({
+    success: true,
+    data: [
+      { id: ChannelType.OPENAI, name: 'OpenAI' },
+      { id: ChannelType.AZURE, name: 'Azure OpenAI' },
+      { id: ChannelType.ANTHROPIC, name: 'Anthropic Claude' },
+      { id: ChannelType.GOOGLE, name: 'Google Gemini' },
+      { id: ChannelType.CUSTOM, name: 'Custom' },
+    ],
+  });
+});
+
+// GET /api/channel/models_enabled - 获取已启用渠道的模型列表
+channel.get('/models_enabled', async (c) => {
+  const channelService = new ChannelService(c.env.DB);
+  const channels = await channelService.findEnabled();
+
+  const modelsSet = new Set<string>();
+  for (const ch of channels) {
+    if (ch.models) {
+      const models = ch.models.split(',').map((m: string) => m.trim());
+      for (const model of models) {
+        if (model && model !== '*') {
+          modelsSet.add(model);
+        }
+      }
+    }
+  }
+
+  return c.json({
+    success: true,
+    message: '',
+    data: Array.from(modelsSet),
+  });
+});
+
+// GET /api/channel/models - 别名, 获取已启用渠道的模型列表
+channel.get('/models', async (c) => {
+  const channelService = new ChannelService(c.env.DB);
+  const channels = await channelService.findEnabled();
+
+  const modelsSet = new Set<string>();
+  for (const ch of channels) {
+    if (ch.models) {
+      const models = ch.models.split(',').map((m: string) => m.trim());
+      for (const model of models) {
+        if (model && model !== '*') {
+          modelsSet.add(model);
+        }
+      }
+    }
+  }
+
+  return c.json({
+    success: true,
+    message: '',
+    data: Array.from(modelsSet),
+  });
+});
+
+// GET /api/channel/search - 搜索渠道
+channel.get('/search', async (c) => {
+  const keyword = c.req.query('keyword') || '';
+
+  try {
+    const stmt = c.env.DB.prepare(`
+      SELECT * FROM channels
+      WHERE name LIKE ? OR models LIKE ?
+      ORDER BY priority DESC, id DESC
+      LIMIT 50
+    `).bind(`%${keyword}%`, `%${keyword}%`);
+
+    const result = await stmt.all();
+
+    const userRole = c.get('userRole');
+    const safeChannels = (result.results || []).map((ch: Record<string, unknown>) => ({
+      ...ch,
+      key: userRole >= UserRole.ROOT ? ch.key : String(ch.key || '').substring(0, 8) + '...',
+    }));
+
+    return c.json({ success: true, data: safeChannels });
+  } catch (err) {
+    console.error('Channel search error:', err);
+    return c.json({ success: true, data: [] });
+  }
+});
+
+// 动态路由放在静态路由之后
 channel.get('/:id', async (c) => {
   const channelId = parseInt(c.req.param('id'), 10);
   const channelService = new ChannelService(c.env.DB);
@@ -166,17 +256,50 @@ channel.delete('/:id', async (c) => {
   return c.json({ success: true, message: 'Channel deleted' });
 });
 
-channel.get('/types/list', async (c) => {
-  return c.json({
-    success: true,
-    data: [
-      { id: ChannelType.OPENAI, name: 'OpenAI' },
-      { id: ChannelType.AZURE, name: 'Azure OpenAI' },
-      { id: ChannelType.ANTHROPIC, name: 'Anthropic Claude' },
-      { id: ChannelType.GOOGLE, name: 'Google Gemini' },
-      { id: ChannelType.CUSTOM, name: 'Custom' },
-    ],
-  });
+// PUT /api/channel/ - 更新渠道 (不带ID，从body获取)
+channel.put('/', async (c) => {
+  const body = await c.req.json<{
+    id: number;
+    name?: string;
+    type?: number;
+    key?: string;
+    base_url?: string;
+    models?: string;
+    model_mapping?: string;
+    status?: number;
+    priority?: number;
+    weight?: number;
+  }>();
+
+  if (!body.id) {
+    return c.json({ success: false, message: 'Channel ID is required' }, 400);
+  }
+
+  const channelService = new ChannelService(c.env.DB);
+  const channel = await channelService.findById(body.id);
+
+  if (!channel) {
+    return c.json({ success: false, message: 'Channel not found' }, 404);
+  }
+
+  try {
+    await channelService.update(body.id, {
+      name: body.name,
+      type: body.type,
+      key: body.key,
+      baseUrl: body.base_url,
+      models: body.models,
+      modelMapping: body.model_mapping,
+      status: body.status,
+      priority: body.priority,
+      weight: body.weight,
+    });
+
+    return c.json({ success: true, message: 'Channel updated' });
+  } catch (err) {
+    console.error('Channel update error:', err);
+    return c.json({ success: false, message: 'Failed to update channel' }, 500);
+  }
 });
 
 export default channel;

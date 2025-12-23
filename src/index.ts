@@ -1,14 +1,12 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
-import { trimTrailingSlash } from 'hono/trailing-slash';
 import type { CloudflareBindings } from './types';
 import { errorHandler, requestId, timing } from './middleware';
-import { userRoutes, tokenRoutes, channelRoutes, relayRoutes, miscRoutes } from './routes';
+import { userRoutes, tokenRoutes, channelRoutes, relayRoutes, miscRoutes, modelRoutes } from './routes';
 
-const app = new Hono<{ Bindings: CloudflareBindings }>({ strict: true });
-
-app.use(trimTrailingSlash());
+// 使用 strict: false 让 Hono 自动处理尾部斜杠
+const app = new Hono<{ Bindings: CloudflareBindings }>({ strict: false });
 app.use('*', errorHandler());
 app.use('*', requestId());
 app.use('*', timing());
@@ -50,6 +48,7 @@ app.get('/health', (c) => {
 app.route('/api/user', userRoutes);
 app.route('/api/token', tokenRoutes);
 app.route('/api/channel', channelRoutes);
+app.route('/api/models', modelRoutes);
 app.route('/api', miscRoutes);
 app.route('/', relayRoutes);
 
