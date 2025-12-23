@@ -35,10 +35,12 @@ export class SecureVerificationService {
    */
   static async checkAvailableVerificationMethods() {
     try {
+      // 使用 skipErrorHandler 避免 401 触发全局登出逻辑
+      // 这些 API 的 401 应该被静默处理，不应导致用户被登出
       const [twoFAResponse, passkeyResponse, passkeySupported] =
         await Promise.all([
-          API.get('/api/user/2fa/status'),
-          API.get('/api/user/passkey'),
+          API.get('/api/user/2fa/status', { skipErrorHandler: true }),
+          API.get('/api/user/passkey', { skipErrorHandler: true }),
           isPasskeySupported(),
         ]);
 

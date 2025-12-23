@@ -181,7 +181,8 @@ const PersonalSetting = () => {
 
   const loadPasskeyStatus = async () => {
     try {
-      const res = await API.get('/api/user/passkey');
+      // 使用 skipErrorHandler 避免 401 触发全局登出逻辑
+      const res = await API.get('/api/user/passkey', { skipErrorHandler: true });
       const { success, data, message } = res.data;
       if (success) {
         setPasskeyStatus({
