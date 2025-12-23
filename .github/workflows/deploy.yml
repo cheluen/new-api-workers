@@ -19,13 +19,24 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: ./web
         run: npm ci
 
       - name: Build frontend
-        run: npm run build:frontend
+        working-directory: ./web
+        run: npm run build
         env:
           CI: true
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Copy frontend build to dist
+        run: |
+          rm -rf dist
+          cp -r web/dist dist
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
