@@ -107,8 +107,36 @@ misc.get('/status', async (c) => {
     faq_enabled: false,
 
     // 模块配置 - 返回JSON字符串，前端会用 JSON.parse 解析
+    // SidebarModulesAdmin 必须包含完整的侧边栏配置，否则侧边栏会显示skeleton加载状态
     HeaderNavModules: '[]',
-    SidebarModulesAdmin: '[]',
+    SidebarModulesAdmin: JSON.stringify({
+      chat: {
+        enabled: true,
+        playground: true,
+        chat: true,
+      },
+      console: {
+        enabled: true,
+        detail: true,
+        token: true,
+        log: true,
+        midjourney: false,  // Workers版本暂不支持
+        task: false,        // Workers版本暂不支持
+      },
+      personal: {
+        enabled: true,
+        topup: false,       // Workers版本暂不支持充值
+        personal: true,
+      },
+      admin: {
+        enabled: true,
+        channel: true,
+        models: true,
+        redemption: false,  // Workers版本暂不支持兑换码
+        user: true,
+        setting: true,
+      },
+    }),
 
     // 法律条款
     user_agreement_enabled: false,
