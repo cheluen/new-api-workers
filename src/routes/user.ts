@@ -122,6 +122,10 @@ user.get('/self', jwtAuth(), async (c) => {
     return c.json({ success: false, message: 'User not found' }, 404);
   }
 
+  // 从请求头中获取当前使用的token并返回，确保前端刷新用户数据时不会丢失token
+  const authHeader = c.req.header('Authorization');
+  const currentToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
   return c.json({
     success: true,
     data: {
@@ -136,7 +140,8 @@ user.get('/self', jwtAuth(), async (c) => {
       used_quota: user.used_quota,
       request_count: user.request_count,
       created_at: user.created_at,
-      sidebar_modules: user.sidebar_modules || null,  // 用户侧边栏配置
+      sidebar_modules: user.sidebar_modules || null,
+      token: currentToken,  // 返回当前使用的token，防止前端刷新时丢失
     },
   });
 });
@@ -398,8 +403,8 @@ user.get('/amount', jwtAuth(), async (c) => {
 user.post('/amount', jwtAuth(), async (c) => {
   return c.json({
     success: false,
-    message: 'Online payment is not supported in Workers version',
-  }, 501);
+    message: 'Online payment is not supported in Workers version. Please use redemption codes instead.',
+  });
 });
 
 // GET /api/user/ - 获取用户列表 (���理员)
