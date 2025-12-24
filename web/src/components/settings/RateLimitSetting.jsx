@@ -55,7 +55,7 @@ const RateLimitSetting = () => {
 
       setInputs(newInputs);
     } else {
-      showError(message);
+      showError(message || '获取设置失败');
     }
   };
   async function onRefresh() {

@@ -127,8 +127,9 @@ const SystemSetting = () => {
 
   const getOptions = async () => {
     setLoading(true);
-    const res = await API.get('/api/option/');
-    const { success, message, data } = res.data;
+    try {
+      const res = await API.get('/api/option/');
+      const { success, message, data } = res.data;
     if (success) {
       let newInputs = {};
       data.forEach((item) => {
@@ -228,9 +229,14 @@ const SystemSetting = () => {
       }
       setIsLoaded(true);
     } else {
-      showError(message);
+      showError(message || '获取设置失败');
     }
-    setLoading(false);
+    } catch (error) {
+      showError('获取设置失败');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

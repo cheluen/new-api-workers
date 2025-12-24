@@ -240,10 +240,10 @@ const TopUp = () => {
             document.body.removeChild(form);
           }
         } else {
-          showError(data);
+          showError(data || t('支付请求失败'));
         }
       } else {
-        showError(res);
+        showError(t('支付请求失败'));
       }
     } catch (err) {
       console.log(err);
@@ -284,10 +284,10 @@ const TopUp = () => {
         if (message === 'success') {
           processCreemCallback(data);
         } else {
-          showError(data);
+          showError(data || t('支付请求失败'));
         }
       } else {
-        showError(res);
+        showError(t('支付请求失败'));
       }
     } catch (err) {
       console.log(err);
