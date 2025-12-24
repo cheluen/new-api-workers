@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
 
@@ -16,6 +17,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/setup", controller.GetSetup)
 		apiRouter.POST("/setup", controller.PostSetup)
 		apiRouter.GET("/status", controller.GetStatus)
+		apiRouter.GET("/dashboard", middleware.UserAuth(), controller.GetSelf)
 		apiRouter.GET("/uptime/status", controller.GetUptimeKumaStatus)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
 		apiRouter.GET("/status/test", middleware.AdminAuth(), controller.TestStatus)
@@ -40,6 +42,40 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/oauth/telegram/login", middleware.CriticalRateLimit(), controller.TelegramLogin)
 		apiRouter.GET("/oauth/telegram/bind", middleware.CriticalRateLimit(), controller.TelegramBind)
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)
+
+		// /api/v1/models 兼容路由
+		modelsCompatRoute := apiRouter.Group("/v1/models")
+		modelsCompatRoute.Use(middleware.TokenAuth())
+		{
+			modelsCompatRoute.GET("", func(c *gin.Context) {
+				switch {
+				case c.GetHeader("x-api-key") != "" && c.GetHeader("anthropic-version") != "":
+					controller.ListModels(c, constant.ChannelTypeAnthropic)
+				case c.GetHeader("x-goog-api-key") != "" || c.Query("key") != "":
+					controller.ListModels(c, constant.ChannelTypeGemini)
+				default:
+					controller.ListModels(c, constant.ChannelTypeOpenAI)
+				}
+			})
+
+			modelsCompatRoute.GET("/:model", func(c *gin.Context) {
+				switch {
+				case c.GetHeader("x-api-key") != "" && c.GetHeader("anthropic-version") != "":
+					controller.RetrieveModel(c, constant.ChannelTypeAnthropic)
+				default:
+					controller.RetrieveModel(c, constant.ChannelTypeOpenAI)
+				}
+			})
+		}
+
+		// /api/dashboard/billing 兼容路由
+		dashboardBillingRoute := apiRouter.Group("/dashboard/billing")
+		dashboardBillingRoute.Use(middleware.CORS(), middleware.TokenAuth())
+		{
+			dashboardBillingRoute.GET("", controller.GetUsage)
+			dashboardBillingRoute.GET("/subscription", controller.GetSubscription)
+			dashboardBillingRoute.GET("/usage", controller.GetUsage)
+		}
 
 		apiRouter.POST("/stripe/webhook", controller.StripeWebhook)
 		apiRouter.POST("/creem/webhook", controller.CreemWebhook)
@@ -118,6 +154,7 @@ func SetApiRouter(router *gin.Engine) {
 		optionRoute.Use(middleware.RootAuth())
 		{
 			optionRoute.GET("/", controller.GetOptions)
+			optionRoute.GET("/full", controller.GetOptions)
 			optionRoute.PUT("/", controller.UpdateOption)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.POST("/migrate_console_setting", controller.MigrateConsoleSetting) // 用于迁移检测的旧键，下个版本会删除
@@ -132,6 +169,7 @@ func SetApiRouter(router *gin.Engine) {
 		channelRoute.Use(middleware.AdminAuth())
 		{
 			channelRoute.GET("/", controller.GetAllChannels)
+			channelRoute.GET("/tag", controller.GetChannelTags)
 			channelRoute.GET("/search", controller.SearchChannels)
 			channelRoute.GET("/models", controller.ChannelListModels)
 			channelRoute.GET("/models_enabled", controller.EnabledListModels)
@@ -211,6 +249,22 @@ func SetApiRouter(router *gin.Engine) {
 		groupRoute.Use(middleware.AdminAuth())
 		{
 			groupRoute.GET("/", controller.GetGroups)
+		}
+		// /api/groups 兼容路由
+		apiRouter.GET("/groups", middleware.AdminAuth(), controller.GetGroups)
+
+		// /api/usedata/* 兼容路由
+		useDataRoute := apiRouter.Group("/usedata")
+		{
+			useDataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
+			useDataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
+		}
+
+		// /api/topup/amount 兼容路由
+		topupRoute := apiRouter.Group("/topup")
+		topupRoute.Use(middleware.UserAuth())
+		{
+			topupRoute.POST("/amount", controller.RequestAmount)
 		}
 
 		prefillGroupRoute := apiRouter.Group("/prefill_group")

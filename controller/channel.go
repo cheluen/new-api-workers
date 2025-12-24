@@ -709,6 +709,36 @@ type ChannelTag struct {
 	HeaderOverride *string `json:"header_override"`
 }
 
+// GetChannelTags 获取所有渠道标签列表
+func GetChannelTags(c *gin.Context) {
+	// 获取所有渠道
+	channels, err := model.GetAllChannels(0, 10000, false, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 提取唯一标签
+	tagMap := make(map[string]bool)
+	for _, channel := range channels {
+		if channel.Tag != nil && *channel.Tag != "" {
+			tagMap[*channel.Tag] = true
+		}
+	}
+
+	// 转换为切片
+	tags := make([]string, 0, len(tagMap))
+	for tag := range tagMap {
+		tags = append(tags, tag)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    tags,
+	})
+}
+
 func DisableTagChannels(c *gin.Context) {
 	channelTag := ChannelTag{}
 	err := c.ShouldBindJSON(&channelTag)
