@@ -422,7 +422,7 @@ user.get('/', jwtAuth(), async (c) => {
     // 获取用户列表
     const stmt = c.env.DB.prepare(`
       SELECT id, username, display_name, email, role, status, quota, used_quota,
-             request_count, created_at
+             request_count, created_at, \`group\`
       FROM users
       ORDER BY id DESC
       LIMIT ? OFFSET ?

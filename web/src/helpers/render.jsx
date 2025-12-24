@@ -645,7 +645,7 @@ export function renderText(text, limit) {
  * @returns {JSX.Element} - The rendered group tags
  */
 export function renderGroup(group) {
-  if (group === '') {
+  if (!group || group === '') {
     return (
       <Tag key='default' color='white' shape='circle'>
         {i18next.t('用户分组')}

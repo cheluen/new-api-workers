@@ -86,15 +86,15 @@ const Home = () => {
     const res = await API.get('/api/home_page_content');
     const { success, message, data } = res.data;
     if (success) {
-      let content = data;
-      if (!data.startsWith('https://')) {
+      let content = data || '';
+      if (data && !data.startsWith('https://')) {
         content = marked.parse(data);
       }
       setHomePageContent(content);
       localStorage.setItem('home_page_content', content);
 
       // 如果内容是 URL，则发送主题模式
-      if (data.startsWith('https://')) {
+      if (data && data.startsWith('https://')) {
         const iframe = document.querySelector('iframe');
         if (iframe) {
           iframe.onload = () => {
@@ -332,11 +332,11 @@ const Home = () => {
                 </div>
               </div>
             </div>
-          </div>
+        </div>
         </div>
       ) : (
         <div className='overflow-x-hidden w-full'>
-          {homePageContent.startsWith('https://') ? (
+          {homePageContent && homePageContent.startsWith('https://') ? (
             <iframe
               src={homePageContent}
               className='w-full h-screen border-none'

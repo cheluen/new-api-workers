@@ -38,8 +38,8 @@ const About = () => {
     const res = await API.get('/api/about');
     const { success, message, data } = res.data;
     if (success) {
-      let aboutContent = data;
-      if (!data.startsWith('https://')) {
+      let aboutContent = data || '';
+      if (data && !data.startsWith('https://')) {
         aboutContent = marked.parse(data);
       }
       setAbout(aboutContent);
@@ -153,7 +153,7 @@ const About = () => {
         </div>
       ) : (
         <>
-          {about.startsWith('https://') ? (
+          {about && about.startsWith('https://') ? (
             <iframe
               src={about}
               style={{ width: '100%', height: '100vh', border: 'none' }}
