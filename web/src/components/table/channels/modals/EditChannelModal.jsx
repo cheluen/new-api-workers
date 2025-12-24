@@ -693,8 +693,13 @@ const EditChannelModal = (props) => {
   const fetchModels = async () => {
     try {
       let res = await API.get(`/api/channel/models`);
+      // API returns string array ["model1", "model2"], normalize to get model id
+      const getModelId = (model) => {
+        if (typeof model === 'string') return model.trim();
+        return (model?.id || '').trim();
+      };
       const localModelOptions = res.data.data.map((model) => {
-        const id = (model.id || '').trim();
+        const id = getModelId(model);
         return {
           key: id,
           label: id,
@@ -702,13 +707,14 @@ const EditChannelModal = (props) => {
         };
       });
       setOriginModelOptions(localModelOptions);
-      setFullModels(res.data.data.map((model) => model.id));
+      setFullModels(res.data.data.map((model) => getModelId(model)));
       setBasicModels(
         res.data.data
           .filter((model) => {
-            return model.id.startsWith('gpt-') || model.id.startsWith('text-');
+            const id = getModelId(model);
+            return id.startsWith('gpt-') || id.startsWith('text-');
           })
-          .map((model) => model.id),
+          .map((model) => getModelId(model)),
       );
     } catch (error) {
       showError(error.message);
