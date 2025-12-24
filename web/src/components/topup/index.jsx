@@ -510,13 +510,14 @@ const TopUp = () => {
       if (res !== undefined) {
         const { message, data } = res.data;
         if (message === 'success') {
-          setAmount(parseFloat(data));
+          const parsedAmount = parseFloat(data);
+          setAmount(isNaN(parsedAmount) ? 0 : parsedAmount);
         } else {
           setAmount(0);
-          Toast.error({ content: '错误：' + data, id: 'getAmount' });
+          Toast.error({ content: '错误：' + (data || '获取金额失败'), id: 'getAmount' });
         }
       } else {
-        showError(res);
+        showError('获取金额失败');
       }
     } catch (err) {
       console.log(err);
@@ -536,13 +537,14 @@ const TopUp = () => {
       if (res !== undefined) {
         const { message, data } = res.data;
         if (message === 'success') {
-          setAmount(parseFloat(data));
+          const parsedAmount = parseFloat(data);
+          setAmount(isNaN(parsedAmount) ? 0 : parsedAmount);
         } else {
           setAmount(0);
-          Toast.error({ content: '错误：' + data, id: 'getAmount' });
+          Toast.error({ content: '错误：' + (data || '获取金额失败'), id: 'getAmount' });
         }
       } else {
-        showError(res);
+        showError('获取金额失败');
       }
     } catch (err) {
       console.log(err);
