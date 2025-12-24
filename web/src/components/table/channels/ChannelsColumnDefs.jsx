@@ -262,8 +262,9 @@ export const getChannelsColumns = ({
       render: (text, record, index) => (
         <div>
           <Space spacing={2}>
-            {text
-              ?.split(',')
+            {(text || '')
+              .split(',')
+              .filter((item) => item)
               .sort((a, b) => {
                 if (a === 'default') return -1;
                 if (b === 'default') return 1;
