@@ -15,13 +15,34 @@ const channel = new Hono<{ Bindings: CloudflareBindings; Variables: Variables }>
 channel.use('/*', jwtAuth());
 channel.use('/*', requireAdmin());
 
+// GET /api/channel/ - 获取渠道列表
+// 前端期望返回: { success: true, data: { items: [...], total: number, type_counts: {...} } }
 channel.get('/', async (c) => {
   const channelService = new ChannelService(c.env.DB);
-  const limit = parseInt(c.req.query('limit') || '50', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
 
-  const channels = await channelService.list(limit, offset);
+  // 支持两种分页参数格式
+  const page = parseInt(c.req.query('p') || '0', 10);
+  const pageSize = parseInt(c.req.query('page_size') || c.req.query('limit') || '50', 10);
+  const offset = parseInt(c.req.query('offset') || String(page * pageSize), 10);
+
+  const channels = await channelService.list(pageSize, offset);
   const userRole = c.get('userRole');
+
+  // 获取总数
+  const countResult = await c.env.DB.prepare('SELECT COUNT(*) as total FROM channels').first<{total: number}>();
+  const total = countResult?.total || 0;
+
+  // 计算每种类型的渠道数量
+  const typeCountsResult = await c.env.DB.prepare(`
+    SELECT type, COUNT(*) as count FROM channels GROUP BY type
+  `).all();
+
+  const type_counts: Record<number, number> = {};
+  if (typeCountsResult.results) {
+    for (const row of typeCountsResult.results) {
+      type_counts[(row as {type: number, count: number}).type] = (row as {type: number, count: number}).count;
+    }
+  }
 
   const safeChannels = channels.map((ch) => ({
     id: ch.id,
@@ -34,11 +55,27 @@ channel.get('/', async (c) => {
     status: ch.status,
     priority: ch.priority,
     weight: ch.weight,
+    tag: ch.tag || '',
+    group: ch.group || 'default',
+    other: ch.other || '',
+    test_model: ch.test_model || '',
+    balance: ch.balance || 0,
+    balance_updated_time: ch.balance_updated_time || 0,
+    used_quota: ch.used_quota || 0,
+    response_time: ch.response_time || 0,
     created_at: ch.created_at,
     updated_at: ch.updated_at,
   }));
 
-  return c.json({ success: true, data: safeChannels });
+  return c.json({
+    success: true,
+    message: '',
+    data: {
+      items: safeChannels,
+      total: total,
+      type_counts: type_counts,
+    }
+  });
 });
 
 channel.post('/', async (c) => {

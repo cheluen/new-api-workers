@@ -414,11 +414,12 @@ user.get('/', jwtAuth(), async (c) => {
     return c.json({ success: false, message: 'Permission denied' }, 403);
   }
 
-  const page = parseInt(c.req.query('p') || '0', 10);
+  const page = parseInt(c.req.query('p') || '1', 10);
   const pageSize = parseInt(c.req.query('page_size') || '20', 10);
-  const offset = page * pageSize;
+  const offset = (page - 1) * pageSize;
 
   try {
+    // 获取用户列表
     const stmt = c.env.DB.prepare(`
       SELECT id, username, display_name, email, role, status, quota, used_quota,
              request_count, created_at
@@ -429,14 +430,22 @@ user.get('/', jwtAuth(), async (c) => {
 
     const result = await stmt.all();
 
+    // 获取总数
+    const countResult = await c.env.DB.prepare('SELECT COUNT(*) as total FROM users').first<{total: number}>();
+    const total = countResult?.total || 0;
+
     return c.json({
       success: true,
       message: '',
-      data: result.results || [],
+      data: {
+        items: result.results || [],
+        page: page,
+        total: total,
+      },
     });
   } catch (err) {
     console.error('Error fetching users:', err);
-    return c.json({ success: true, message: '', data: [] });
+    return c.json({ success: true, message: '', data: { items: [], page: 1, total: 0 } });
   }
 });
 

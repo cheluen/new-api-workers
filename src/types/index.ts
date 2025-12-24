@@ -66,6 +66,14 @@ export interface Channel {
   status: number;
   priority: number;
   weight: number;
+  tag?: string;
+  group?: string;
+  other?: string;
+  test_model?: string;
+  balance?: number;
+  balance_updated_time?: number;
+  used_quota?: number;
+  response_time?: number;
   created_at: string;
   updated_at: string;
 }

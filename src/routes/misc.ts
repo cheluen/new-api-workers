@@ -326,6 +326,7 @@ misc.get('/uptime/status', async (c) => {
 });
 
 // GET /api/option - 获取系统选项 (管理员)
+// 前端期望返回数组格式: [{key: "xxx", value: "xxx"}, ...]
 misc.get('/option', jwtAuth(), async (c) => {
   const userRole = c.get('userRole');
   if (userRole < 10) {
@@ -334,21 +335,42 @@ misc.get('/option', jwtAuth(), async (c) => {
 
   const optionService = new OptionService(c.env.DB);
 
-  // 获取常用配置选项
-  const options: Record<string, string> = {};
+  // 获取所有配置选项
   const keys = [
     'system_name', 'logo', 'footer_html', 'home_page_content', 'notice',
     'register_enabled', 'quota_per_unit', 'default_quota',
+    // Settings页面需要的选项
+    'ModelRatio', 'CompletionRatio', 'GroupRatio', 'UserUsableGroups',
+    'ChannelDisableStatus', 'AutomaticDisableChannelEnabled', 'AutomaticEnableChannelEnabled',
+    'QuotaRemindThreshold', 'PreConsumedQuota', 'RetryTimes',
+    'RetryCooldownSeconds', 'ChannelMaxPriority', 'GroupMaxPriority',
+    'ModelRequestRateLimitEnabled', 'ModelRequestRateLimitCount',
+    'ModelRequestRateLimitSuccessCount', 'ModelRequestRateLimitDurationMinutes',
+    'ModelRequestRateLimitGroup',
+    // Dashboard设置
+    'DataExportEnabled', 'DataExportInterval', 'DataExportDefaultTime',
+    // Drawing设置
+    'DrawingEnabled', 'MjNotifyEnabled',
+    // Chat设置
+    'ChatCacheEnabled', 'ChatCacheExpireMinutes',
+    // Payment设置
+    'TopUpLink', 'PayAddress', 'RechargeDiscount',
+    // System设置
+    'EmailVerification', 'EmailDomainWhitelist', 'DefaultQuota',
+    'DefaultLoginQuota', 'QuotaPerUnit', 'DisplayInCurrency', 'DisplayTokenStat',
   ];
 
+  // 返回数组格式，前端使用 data.forEach((item) => { item.key, item.value })
+  const optionsArray: Array<{key: string, value: string}> = [];
   for (const key of keys) {
-    options[key] = await optionService.get(key, '');
+    const value = await optionService.get(key, '');
+    optionsArray.push({ key, value });
   }
 
   return c.json({
     success: true,
     message: '',
-    data: options,
+    data: optionsArray,
   });
 });
 
@@ -388,15 +410,16 @@ misc.get('/group', jwtAuth(), async (c) => {
 });
 
 // GET /api/log/ - 获取所有日志 (管理员)
+// 前端期望返回: { success: true, data: { items: [...], page, page_size, total } }
 misc.get('/log', jwtAuth(), async (c) => {
   const userRole = c.get('userRole');
   if (userRole < 10) {
     return c.json({ success: false, message: 'Permission denied' }, 403);
   }
 
-  const page = parseInt(c.req.query('p') || '0', 10);
+  const page = parseInt(c.req.query('p') || '1', 10);
   const pageSize = parseInt(c.req.query('page_size') || '20', 10);
-  const offset = page * pageSize;
+  const offset = (page - 1) * pageSize;
 
   // 过滤参数
   const username = c.req.query('username') || '';
@@ -419,21 +442,40 @@ misc.get('/log', jwtAuth(), async (c) => {
     `;
     const params: (string | number)[] = [startTimestamp, endTimestamp];
 
+    // Count query基础
+    let countSql = `
+      SELECT COUNT(*) as total
+      FROM logs l
+      LEFT JOIN users u ON l.user_id = u.id
+      LEFT JOIN tokens t ON l.token_id = t.id
+      WHERE l.created_at >= datetime(?, 'unixepoch')
+        AND l.created_at <= datetime(?, 'unixepoch')
+    `;
+    const countParams: (string | number)[] = [startTimestamp, endTimestamp];
+
     if (username) {
       sql += ` AND u.username LIKE ?`;
+      countSql += ` AND u.username LIKE ?`;
       params.push(`%${username}%`);
+      countParams.push(`%${username}%`);
     }
     if (tokenName) {
       sql += ` AND t.name LIKE ?`;
+      countSql += ` AND t.name LIKE ?`;
       params.push(`%${tokenName}%`);
+      countParams.push(`%${tokenName}%`);
     }
     if (modelName) {
       sql += ` AND l.model LIKE ?`;
+      countSql += ` AND l.model LIKE ?`;
       params.push(`%${modelName}%`);
+      countParams.push(`%${modelName}%`);
     }
     if (channel) {
       sql += ` AND l.channel_id = ?`;
+      countSql += ` AND l.channel_id = ?`;
       params.push(parseInt(channel, 10));
+      countParams.push(parseInt(channel, 10));
     }
 
     sql += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
@@ -442,17 +484,32 @@ misc.get('/log', jwtAuth(), async (c) => {
     const stmt = c.env.DB.prepare(sql).bind(...params);
     const result = await stmt.all();
 
+    // 获取总数
+    const countStmt = c.env.DB.prepare(countSql).bind(...countParams);
+    const countResult = await countStmt.first<{total: number}>();
+    const total = countResult?.total || 0;
+
     return c.json({
       success: true,
       message: '',
-      data: result.results || [],
+      data: {
+        items: result.results || [],
+        page: page,
+        page_size: pageSize,
+        total: total,
+      },
     });
   } catch (err) {
     console.error('Error fetching admin logs:', err);
     return c.json({
       success: true,
       message: '',
-      data: [],
+      data: {
+        items: [],
+        page: 1,
+        page_size: pageSize,
+        total: 0,
+      },
     });
   }
 });
@@ -560,11 +617,12 @@ misc.delete('/log', jwtAuth(), async (c) => {
 });
 
 // GET /api/log/self/ - 获取个人日志 (用户)
+// 前端期望返回: { success: true, data: { items: [...], page, page_size, total } }
 misc.get('/log/self', jwtAuth(), async (c) => {
   const userId = c.get('userId');
-  const page = parseInt(c.req.query('p') || '0', 10);
+  const page = parseInt(c.req.query('p') || '1', 10);
   const pageSize = parseInt(c.req.query('page_size') || '20', 10);
-  const offset = page * pageSize;
+  const offset = (page - 1) * pageSize;
 
   // 过滤参数
   const tokenName = c.req.query('token_name') || '';
@@ -584,13 +642,28 @@ misc.get('/log/self', jwtAuth(), async (c) => {
     `;
     const params: (string | number)[] = [userId, startTimestamp, endTimestamp];
 
+    // Count query基础
+    let countSql = `
+      SELECT COUNT(*) as total
+      FROM logs l
+      LEFT JOIN tokens t ON l.token_id = t.id
+      WHERE l.user_id = ?
+        AND l.created_at >= datetime(?, 'unixepoch')
+        AND l.created_at <= datetime(?, 'unixepoch')
+    `;
+    const countParams: (string | number)[] = [userId, startTimestamp, endTimestamp];
+
     if (tokenName) {
       sql += ` AND t.name LIKE ?`;
+      countSql += ` AND t.name LIKE ?`;
       params.push(`%${tokenName}%`);
+      countParams.push(`%${tokenName}%`);
     }
     if (modelName) {
       sql += ` AND l.model LIKE ?`;
+      countSql += ` AND l.model LIKE ?`;
       params.push(`%${modelName}%`);
+      countParams.push(`%${modelName}%`);
     }
 
     sql += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
@@ -599,17 +672,32 @@ misc.get('/log/self', jwtAuth(), async (c) => {
     const stmt = c.env.DB.prepare(sql).bind(...params);
     const result = await stmt.all();
 
+    // 获取总数
+    const countStmt = c.env.DB.prepare(countSql).bind(...countParams);
+    const countResult = await countStmt.first<{total: number}>();
+    const total = countResult?.total || 0;
+
     return c.json({
       success: true,
       message: '',
-      data: result.results || [],
+      data: {
+        items: result.results || [],
+        page: page,
+        page_size: pageSize,
+        total: total,
+      },
     });
   } catch (err) {
     console.error('Error fetching logs:', err);
     return c.json({
       success: true,
       message: '',
-      data: [],
+      data: {
+        items: [],
+        page: 1,
+        page_size: pageSize,
+        total: 0,
+      },
     });
   }
 });
