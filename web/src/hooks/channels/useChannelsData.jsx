@@ -255,11 +255,11 @@ export const useChannelsData = () => {
         }
 
         if (tagChannelDates.group === '') {
-          tagChannelDates.group = channels[i].group;
+          tagChannelDates.group = channels[i].group || '';
         } else {
-          let channelGroupsStr = channels[i].group;
+          let channelGroupsStr = channels[i].group || '';
           channelGroupsStr.split(',').forEach((item, index) => {
-            if (tagChannelDates.group.indexOf(item) === -1) {
+            if (item && tagChannelDates.group.indexOf(item) === -1) {
               tagChannelDates.group += ',' + item;
             }
           });
