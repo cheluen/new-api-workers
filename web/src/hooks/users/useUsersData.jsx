@@ -266,7 +266,7 @@ export const useUsersData = () => {
 
   // Initialize data on component mount
   useEffect(() => {
-    loadUsers(0, pageSize)
+    loadUsers(1, pageSize)
       .then()
       .catch((reason) => {
         showError(reason);

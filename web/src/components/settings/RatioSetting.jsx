@@ -58,7 +58,7 @@ const RatioSetting = () => {
       let newInputs = {};
       data.forEach((item) => {
         if (
-          item.value.startsWith('{') || item.value.startsWith('[')
+          item.value && (item.value.startsWith('{') || item.value.startsWith('['))
         ) {
           try {
             item.value = JSON.stringify(JSON.parse(item.value), null, 2);
@@ -74,7 +74,7 @@ const RatioSetting = () => {
       });
       setInputs(newInputs);
     } else {
-      showError(message);
+      showError(message || '获取设置失败');
     }
   };
 
