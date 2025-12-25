@@ -438,4 +438,13 @@ export class OptionService {
     const parsed = parseInt(value, 10);
     return isNaN(parsed) ? defaultValue : parsed;
   }
+
+  async getFloat(key: string, defaultValue: number = 0): Promise<number> {
+    const value = await this.get(key);
+    if (value === null) {
+      return defaultValue;
+    }
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
 }

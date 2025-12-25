@@ -399,11 +399,23 @@ user.get('/amount', jwtAuth(), async (c) => {
   });
 });
 
-// POST /api/user/amount - 用户充值请求 (Workers版本不支持在线充值)
+// POST /api/user/amount - 计算充值金额
 user.post('/amount', jwtAuth(), async (c) => {
+  const body = await c.req.json<{ amount: number }>();
+  const amount = body.amount || 0;
+
+  if (amount <= 0) {
+    return c.json({ message: 'success', data: 0 });
+  }
+
+  const optionService = new OptionService(c.env.DB);
+  const price = await optionService.getFloat('price', 1);
+
+  const totalAmount = amount * price;
+
   return c.json({
-    success: false,
-    message: 'Online payment is not supported in Workers version. Please use redemption codes instead.',
+    message: 'success',
+    data: totalAmount,
   });
 });
 
