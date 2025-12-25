@@ -83,7 +83,7 @@ const RatioSetting = () => {
       setLoading(true);
       await getOptions();
     } catch (error) {
-      showError('刷新失败');
+      // API 拦截器已处理 401/429/500 等错误，这里只需静默处理
     } finally {
       setLoading(false);
     }

@@ -124,7 +124,7 @@ const TopUp = () => {
         }
         setRedemptionCode('');
       } else {
-        showError(message);
+        showError(message || t('兑换失败'));
       }
     } catch (err) {
       showError(t('请求失败'));
@@ -309,7 +309,7 @@ const TopUp = () => {
     if (success) {
       userDispatch({ type: 'login', payload: data });
     } else {
-      showError(message);
+      showError(message || t('获取用户信息失败'));
     }
   };
 
@@ -435,7 +435,7 @@ const TopUp = () => {
       let link = `${window.location.origin}/register?aff=${data}`;
       setAffLink(link);
     } else {
-      showError(message);
+      showError(message || t('获取邀请码失败'));
     }
   };
 
@@ -454,7 +454,7 @@ const TopUp = () => {
       setOpenTransfer(false);
       getUserQuota().then();
     } else {
-      showError(message);
+      showError(message || t('划转失败'));
     }
   };
 
